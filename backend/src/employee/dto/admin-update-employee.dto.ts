@@ -24,8 +24,8 @@ export class AdminUpdateEmployeeDto {
   @IsString()
   phone?: string;
 
-  @ApiPropertyOptional({ enum: ['probation', 'official', 'resigned'] })
+  @ApiPropertyOptional({ enum: ['probation', 'official', 'resigned', 'inactive'] })
   @IsOptional()
-  @IsIn(['probation', 'official', 'resigned'])
+  @IsIn(['probation', 'official', 'resigned', 'inactive'])
   status?: string;
 }

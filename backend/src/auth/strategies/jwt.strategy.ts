@@ -39,7 +39,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token invalid or user not found');
     }
 
-    if (employee.status === 'resigned') {
+    if (employee.status === 'resigned' || employee.status === 'inactive') {
       throw new UnauthorizedException('Account is deactivated');
     }
 

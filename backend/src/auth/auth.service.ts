@@ -30,7 +30,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (employee.status === 'resigned') {
+    if (employee.status === 'resigned' || employee.status === 'inactive') {
       throw new UnauthorizedException('Account is deactivated');
     }
 

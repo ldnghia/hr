@@ -78,8 +78,8 @@ export class EmployeeController {
   }
 
   @Patch(':id/password')
-  @Roles('admin')
-  @ApiOperation({ summary: 'Reset employee password (admin only)' })
+  @Roles('admin', 'manager')
+  @ApiOperation({ summary: 'Reset employee password (admin, manager)' })
   @ApiParam({ name: 'id', type: 'integer' })
   updatePassword(
     @Param('id', ParseIntPipe) id: number,
