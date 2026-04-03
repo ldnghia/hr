@@ -36,7 +36,7 @@ export default function EmployeeDetailPage() {
   const { user } = useAuth();
 
   const canEdit     = user?.role === 'admin' || user?.role === 'hr';
-  const canPassword = user?.role === 'admin';
+  const canPassword = user?.role === 'admin' || user?.role === 'manager';
 
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [history, setHistory]   = useState<HistoryRecord[]>([]);

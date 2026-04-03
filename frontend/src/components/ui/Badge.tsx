@@ -41,6 +41,7 @@ export function statusBadge(status: string) {
     probation: 'warning',
     rejected: 'danger',
     resigned: 'danger',
+    inactive: 'neutral',
     cancelled: 'neutral',
     unpaid: 'neutral',
     annual: 'info',

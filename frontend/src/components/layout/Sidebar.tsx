@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/utils/cn';
@@ -151,12 +152,18 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       {/* Logo + close button */}
       <div className="flex h-14 items-center justify-between border-b border-gray-200 px-5 lg:h-16 lg:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-            <svg className="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a4 4 0 00-1.5-3.138A4 4 0 0118 17v1h-2zM4 18v-1a4 4 0 011.5-3.138A4 4 0 002 17v1h2z" />
-            </svg>
+          <Image
+            src="/logo.png"
+            alt="Dcorp logo"
+            width={36}
+            height={36}
+            className="h-9 w-auto object-contain"
+            priority
+          />
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-bold text-gray-900">Dcorp</span>
+            <span className="text-xs text-gray-500">Workforce Management</span>
           </div>
-          <span className="text-base font-bold text-gray-900">HR System</span>
         </div>
 
         {/* Close button — mobile only */}
@@ -196,22 +203,19 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           );
         })}
 
-        {/* My Profile — employee shortcut */}
-        {role === 'employee' && user && (
+        {/* My Profile — visible to all authenticated users */}
+        {user && (
           <Link
-            href={`/employees/${user.id}`}
+            href="/profile"
             onClick={onClose}
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]',
-              pathname.startsWith(`/employees/${user.id}`)
+              pathname === '/profile'
                 ? 'bg-indigo-50 text-indigo-700'
                 : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
             )}
           >
-            <span className={cn(
-              'shrink-0',
-              pathname.startsWith(`/employees/${user.id}`) ? 'text-indigo-600' : 'text-gray-400',
-            )}>
+            <span className={cn('shrink-0', pathname === '/profile' ? 'text-indigo-600' : 'text-gray-400')}>
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

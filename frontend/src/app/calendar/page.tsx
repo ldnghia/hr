@@ -343,7 +343,7 @@ export default function CalendarPage() {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <AppShell>
+    <AppShell title="Calendar">
       <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
 
         {/* ── Header ── */}

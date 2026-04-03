@@ -31,6 +31,7 @@ export interface UpdateEmployeePayload {
   phone?: string;
   status?: string;
   role?: string;
+  branchId?: number;
   departmentId?: number;
   positionId?: number;
   managerId?: number;

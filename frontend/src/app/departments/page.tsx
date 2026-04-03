@@ -351,10 +351,10 @@ export default function DepartmentsPage() {
   function openEdit(d: Department) { setSelected(d); setModalOpen(true); }
   function openDelete(d: Department) { setSelected(d); setDeleteOpen(true); }
 
-  if (loading) return <AppShell><PageSpinner /></AppShell>;
+  if (loading) return <AppShell title="Departments"><PageSpinner /></AppShell>;
 
   return (
-    <AppShell>
+    <AppShell title="Departments">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

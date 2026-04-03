@@ -102,6 +102,7 @@ export default function EmployeesPage() {
                 <option value="probation">Probation</option>
                 <option value="official">Official</option>
                 <option value="resigned">Resigned</option>
+                <option value="inactive">Inactive</option>
               </select>
             </div>
             <Button type="submit" variant="secondary">Search</Button>

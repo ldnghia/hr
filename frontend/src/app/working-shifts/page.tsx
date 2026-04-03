@@ -366,10 +366,10 @@ export default function WorkingShiftsPage() {
   function openEdit(s: Shift) { setSelected(s); setModalOpen(true); }
   function openDelete(s: Shift) { setSelected(s); setDeleteOpen(true); }
 
-  if (loading) return <AppShell><PageSpinner /></AppShell>;
+  if (loading) return <AppShell title="Working Shifts"><PageSpinner /></AppShell>;
 
   return (
-    <AppShell>
+    <AppShell title="Working Shifts">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">

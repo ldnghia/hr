@@ -280,10 +280,10 @@ export default function PositionsPage() {
   function openEdit(p: Position) { setSelected(p); setModalOpen(true); }
   function openDelete(p: Position) { setSelected(p); setDeleteOpen(true); }
 
-  if (loading) return <AppShell><PageSpinner /></AppShell>;
+  if (loading) return <AppShell title="Positions"><PageSpinner /></AppShell>;
 
   return (
-    <AppShell>
+    <AppShell title="Positions">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">

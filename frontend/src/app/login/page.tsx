@@ -7,6 +7,7 @@
 // reconcile a <Suspense> boundary node → React throws a hydration error.
 // Solution: use useSearchParams() directly here, no Suspense needed.
 
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -87,12 +88,18 @@ export default function LoginPage() {
 
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg">
-            <svg className="h-7 w-7 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a4 4 0 00-1.5-3.138A4 4 0 0118 17v1h-2zM4 18v-1a4 4 0 011.5-3.138A4 4 0 002 17v1h2z" />
-            </svg>
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <Image
+              src="/logo.png"
+              alt="Dcorp logo"
+              width={56}
+              height={56}
+              className="h-14 w-auto object-contain"
+              priority
+            />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">HR Management System</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Dcorp</h1>
+          <p className="mt-0.5 text-sm font-medium text-indigo-600">Workforce Management</p>
           <p className="mt-1 text-sm text-gray-500">Sign in to your account</p>
         </div>
 
