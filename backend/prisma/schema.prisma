@@ -187,12 +187,6 @@ model CalendarYear {
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-<<<<<<< HEAD
-=======
-
-  // Relation to CalendarDay entries for this year
-  days        CalendarDay[] @relation("YearDays")
->>>>>>> 762b79665a11a19db793d89066604d4937c1e248
 
   @@map("calendar_year")
 }
@@ -205,12 +199,7 @@ model CalendarDay {
   isPaid Boolean  @default(true) @map("is_paid")
   note   String?
 
-<<<<<<< HEAD
-=======
-  // Back‑relation to the owning year
-  yearRef CalendarYear @relation("YearDays", fields: [year], references: [year])
 
->>>>>>> 762b79665a11a19db793d89066604d4937c1e248
   @@map("calendar_day")
 }
 
