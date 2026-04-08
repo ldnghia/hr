@@ -74,6 +74,15 @@ export class UpdateEmployeeDto {
   @Type(() => Number)
   @IsInt()
   shiftId?: number;
+<<<<<<< HEAD
+=======
+
+  @ApiPropertyOptional({ description: 'Initial Leave Balance (days) – admin/HR only' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  initialLeaveBalance?: number;
+>>>>>>> 762b79665a11a19db793d89066604d4937c1e248
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

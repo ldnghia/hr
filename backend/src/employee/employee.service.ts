@@ -306,8 +306,41 @@ export class EmployeeService {
       }
     }
 
+    // ── Update initial Leave Balance (admin/hr only) ──
+    if (dto.initialLeaveBalance !== undefined) {
+      const bal = await this.prisma.leaveBalance.findUnique({ where: { employeeId: id } });
+      if (!bal) {
+        await this.prisma.leaveBalance.create({
+          data: {
+            employeeId: id,
+            total: dto.initialLeaveBalance,
+            used: 0,
+            remaining: dto.initialLeaveBalance,
+          },
+        });
+      } else {
+        const used = bal.used ? Number(bal.used) : 0;
+        const newTotal = dto.initialLeaveBalance;
+        const newRemaining = Math.max(newTotal - used, 0);
+        await this.prisma.leaveBalance.update({
+          where: { employeeId: id },
+          data: { total: newTotal, remaining: newRemaining },
+        });
+      }
+      
+      await this.prisma.leaveAccrualLog.create({
+        data: {
+          employeeId: id,
+          days: dto.initialLeaveBalance,
+          note: 'Admin/HR updated initial balance',
+          accrualDate: new Date(),
+        },
+      });
+    }
+
     await this.auditService.log(actorId, 'EMPLOYEE_UPDATED', 'employee', id, {
       changedFields: historyRecords.map((r) => r.field),
+      ...(dto.initialLeaveBalance !== undefined && { updatedInitialLeave: dto.initialLeaveBalance }),
     });
 
     return updated;

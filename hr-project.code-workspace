@@ -1,7 +1,6 @@
 {
   "folders": [
     { "name": "Backend", "path": "./backend" },
-    { "name": "Frontend", "path": "./frontend" },
-    { "name": "Mobile", "path": "./mobile" }
+    { "name": "Frontend", "path": "./frontend" }
   ]
 }
