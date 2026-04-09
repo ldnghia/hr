@@ -104,17 +104,11 @@ export default function LoginPage() {
 
           <h1 className="text-2xl font-bold text-gray-900">Dcorp</h1>
 
-          <p
-            className="mt-0.5 text-sm font-medium text-indigo-600"
-            suppressHydrationWarning
-          >
+          <p className="mt-0.5 text-sm font-medium text-indigo-600">
             {t('auth.workforceManagement')}
           </p>
 
-          <p
-            className="mt-1 text-sm text-gray-500"
-            suppressHydrationWarning
-          >
+          <p className="mt-1 text-sm text-gray-500">
             {t('auth.signInTo')}
           </p>
         </div>
@@ -155,18 +149,12 @@ export default function LoginPage() {
               {submitting ? (
                 <div className="flex items-center gap-2">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  <span suppressHydrationWarning>
-                    {t('auth.signingIn')}
-                  </span>
+                  {t('auth.signingIn')}
                 </div>
               ) : loading ? (
-                <span suppressHydrationWarning>
-                  {t('common.loading')}
-                </span>
+                t('common.loading')
               ) : (
-                <span suppressHydrationWarning>
-                  {t('auth.signIn')}
-                </span>
+                t('auth.signIn')
               )}
             </button>
           </form>

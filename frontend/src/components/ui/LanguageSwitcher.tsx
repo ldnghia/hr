@@ -16,7 +16,10 @@ export function LanguageSwitcher() {
       {LANGUAGES.map(({ code, label }, idx) => (
         <button
           key={code}
-          onClick={() => i18n.changeLanguage(code)}
+          onClick={() => {
+          i18n.changeLanguage(code);
+          localStorage.setItem('i18nextLng', code);
+          }}
           className={[
             'px-2.5 py-1 transition-colors',
             idx !== 0 ? 'border-l border-gray-200' : '',
