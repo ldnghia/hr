@@ -6,9 +6,9 @@
  * geolocation (and other Secure Context APIs) work on real mobile devices.
  *
  * Prerequisites:
- *   1. Run `npm run certs` to generate certificates/dcorp.vn.pem and
- *      certificates/dcorp.vn-key.pem via mkcert.
- *   2. Map dcorp.vn → 127.0.0.1 in /etc/hosts (Mac/Linux) or the Windows
+ *   1. Run `npm run certs` to generate certificates/hr.dcorp.com.vn.pem and
+ *      certificates/hr.dcorp.com.vn-key.pem via mkcert.
+ *   2. Map hr.dcorp.com.vn → 127.0.0.1 in /etc/hosts (Mac/Linux) or the Windows
  *      hosts file. On mobile, use a custom DNS entry pointing to this
  *      machine's LAN IP.
  *   3. On Android/iOS, install the mkcert CA root certificate so the browser
@@ -37,7 +37,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const PORT     = parseInt(process.env.PORT ?? '3000', 10);
 const HOSTNAME = '0.0.0.0';   // bind to all interfaces so mobile devices can reach us
-const DOMAIN   = 'dcorp.vn';
+const DOMAIN   = 'hr.dcorp.com.vn';
 const dev      = process.env.NODE_ENV !== 'production';
 
 const CERT_DIR  = resolve(__dirname, 'certificates');

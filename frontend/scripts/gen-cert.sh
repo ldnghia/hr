@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# gen-cert.sh — Generate a locally-trusted TLS certificate for dcorp.vn
+# gen-cert.sh — Generate a locally-trusted TLS certificate for hr.dcorp.com.vn
 #               using mkcert. Run once; re-run only if the cert expires or
 #               you add a new hostname/IP.
 #
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 CERT_DIR="$(cd "$(dirname "$0")/.." && pwd)/certificates"
-DOMAIN="dcorp.vn"
+DOMAIN="hr.dcorp.com.vn"
 
 # ── 1. Check mkcert ─────────────────────────────────────────────────────────
 if ! command -v mkcert &> /dev/null; then

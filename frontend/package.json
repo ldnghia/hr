@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --webpack",
     "dev:webpack": "next dev --hostname 0.0.0.0 --webpack",
-    "dev:https": "next dev --hostname dcorp.vn --port 3000 --webpack --experimental-https --experimental-https-key certificates/dcorp.vn-key.pem --experimental-https-cert certificates/dcorp.vn.pem",
+    "dev:https": "next dev --hostname hr.dcorp.com.vn --port 3000 --webpack --experimental-https --experimental-https-key certificates/hr.dcorp.com.vn-key.pem --experimental-https-cert certificates/hr.dcorp.com.vn.pem",
     "dev:dual": "node server-dual.mjs",
     "dev:proxy": "node https-proxy.mjs",
     "certs": "bash scripts/gen-cert.sh",

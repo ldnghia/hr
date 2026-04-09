@@ -13,14 +13,14 @@ import { resolve } from 'node:path';
 
 const PORT   = 3443;
 const TARGET = 3000;
-const DOMAIN = 'dcorp.vn';
+const DOMAIN = 'hr.dcorp.com.vn';
 
 const CERT_DIR = resolve('certificates');
 const KEY_FILE = resolve(CERT_DIR, `${DOMAIN}-key.pem`);
 const CERT_FILE = resolve(CERT_DIR, `${DOMAIN}.pem`);
 
 if (!fs.existsSync(KEY_FILE) || !fs.existsSync(CERT_FILE)) {
-  console.error('\n  ✗ TLS certificates not found for dcorp.vn');
+  console.error('\n  ✗ TLS certificates not found for hr.dcorp.com.vn');
   console.error('  Run  npm run certs  to generate them, then retry.\n');
   process.exit(1);
 }
@@ -79,7 +79,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  │          HTTPS Development Proxy Ready        │');
   console.log('  └───────────────────────────────────────────────┘\n');
   console.log(`  Target:  http://localhost:${TARGET}`);
-  console.log(`  Secure:  https://dcorp.vn:${PORT}`);
+  console.log(`  Secure:  https://hr.dcorp.com.vn:${PORT}`);
   console.log(`           https://localhost:${PORT}`);
   console.log('\n  (Enable both: run npm run dev + npm run dev:proxy in separate terminals)\n');
 });

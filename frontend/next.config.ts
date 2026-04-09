@@ -17,7 +17,7 @@ function getLanIPs(): string[] {
 }
 
 const lanIPs = getLanIPs();
-const DEV_DOMAINS = ['dcorp.vn'];
+const DEV_DOMAINS = ['hr.dcorp.com.vn'];
 
 const nextConfig: NextConfig = {
   /**

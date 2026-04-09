@@ -16,7 +16,7 @@ import next from 'next';
 const dev     = process.env.NODE_ENV !== 'production';
 const HTTP_PORT  = 3000;
 const HTTPS_PORT = 3443;
-const DOMAIN     = 'dcorp.vn';
+const DOMAIN     = 'hr.dcorp.com.vn';
 
 // Disable telemetry + force webpack to avoid certain Rust panics on older CPUs
 process.env.NEXT_TELEMETRY_DISABLED = '1';
@@ -53,7 +53,7 @@ app.prepare().then(() => {
       const parsedUrl = parse(req.url, true);
       handle(req, res, parsedUrl);
     }).listen(HTTPS_PORT, '0.0.0.0', () => {
-      console.log(`  🔒 HTTPS Dev: https://dcorp.vn:${HTTPS_PORT}`);
+      console.log(`  🔒 HTTPS Dev: https://hr.dcorp.com.vn:${HTTPS_PORT}`);
       console.log(`              https://localhost:${HTTPS_PORT}\n`);
     });
   } else {
