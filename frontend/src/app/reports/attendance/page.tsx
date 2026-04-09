@@ -45,10 +45,20 @@ export default function AttendanceReportPage() {
   const [limit, setLimit] = useState(50);
   const [summary, setSummary] = useState({ totalWorkingHours: 0 });
 
+  // Default filter: 1st of current month → today
+  const defaultDateFrom = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  })();
+  const defaultDateTo = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
   // Filters
   const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: '',
+    dateFrom: defaultDateFrom,
+    dateTo: defaultDateTo,
     employeeName: '',
     employeeCode: '',
     q: '',
@@ -280,7 +290,7 @@ export default function AttendanceReportPage() {
             </div>
           </div>
           <div className="flex items-end justify-end gap-4">
-            <Button variant="secondary" onClick={() => { setFilters({ dateFrom: '', dateTo: '', employeeName: '', employeeCode: '', q: '', isLate: undefined, isEarlyOut: undefined }); setPage(1); }}>
+            <Button variant="secondary" onClick={() => { setFilters({ dateFrom: defaultDateFrom, dateTo: defaultDateTo, employeeName: '', employeeCode: '', q: '', isLate: undefined, isEarlyOut: undefined }); setPage(1); }}>
               {t('reports.reset')}
             </Button>
             <Button onClick={handleExport} className="bg-emerald-600 hover:bg-emerald-700">
