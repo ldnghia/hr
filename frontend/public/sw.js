@@ -8,7 +8,7 @@
  *  ├─────────────────────────────┼───────────────────────────────────────────┤
  *  │ /api/* (all API calls)      │ Network-only → 503 JSON on failure        │
  *  │ Navigation (HTML pages)     │ Network-first → cache → offline.html      │
- *  │ _next/static/* (immutable)  │ Cache-first (long-lived, hash in URL)     │
+ *  │ _next/* (JS/CSS chunks)     │ Bypass — handled by Next.js HTTP headers  │
  *  │ Other static assets         │ Cache-first → network → cache             │
  *  └─────────────────────────────┴───────────────────────────────────────────┘
  *
@@ -21,12 +21,17 @@
 // ─── Cache versioning ────────────────────────────────────────────────────────
 // Bump CACHE_VERSION to force all clients to receive the new SW on next visit.
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const PRECACHE_NAME = `hr-precache-${CACHE_VERSION}`;  // shell assets, offline page
-const STATIC_CACHE  = `hr-static-${CACHE_VERSION}`;    // _next/static (immutable)
-const DYNAMIC_CACHE = `hr-dynamic-${CACHE_VERSION}`;   // runtime pages / assets
+const DYNAMIC_CACHE = `hr-dynamic-${CACHE_VERSION}`;   // runtime pages / icons
 
-const ALL_CACHES = [PRECACHE_NAME, STATIC_CACHE, DYNAMIC_CACHE];
+const ALL_CACHES = [PRECACHE_NAME, DYNAMIC_CACHE];
+
+// NOTE: _next/static/ chunks are intentionally NOT cached by the SW.
+// Next.js already serves them with `Cache-Control: public, max-age=31536000, immutable`
+// in production (content-hashed URLs). In dev (Turbopack), those URLs are NOT
+// content-hashed — caching them would cause the browser to serve stale JS modules
+// after every rebuild, breaking HMR and causing "module factory not available" errors.
 
 // Assets to cache immediately on install (must be small and stable)
 const PRECACHE_URLS = [
@@ -60,9 +65,9 @@ function shouldBypass(request) {
   return false;
 }
 
-/** True when the URL belongs to Next.js immutable build output. */
-function isImmutableAsset(url) {
-  return url.pathname.startsWith('/_next/static/');
+/** True when the URL belongs to Next.js internal build output — never cache these. */
+function isNextInternal(url) {
+  return url.pathname.startsWith('/_next/');
 }
 
 /** True for page navigations. */
@@ -145,12 +150,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Strategy 1 — Immutable build assets: cache-first, no expiry
-  // _next/static URLs include a content hash so cache poisoning is not a risk.
-  if (isImmutableAsset(url)) {
-    event.respondWith(cacheFirst(request, STATIC_CACHE));
-    return;
-  }
+  // Strategy 1 — Next.js internals (_next/*): always bypass.
+  // The browser HTTP cache + Next.js cache headers handle these correctly.
+  // Letting the SW cache them causes stale JS in Turbopack dev (no content hash).
+  if (isNextInternal(url)) return;
 
   // Strategy 2 — Page navigations: network-first, fallback to offline page
   if (isNavigation(request)) {
