@@ -381,7 +381,7 @@ export class AttendanceService {
       officeStatus = isInOffice ? 'IN_OFFICE' : 'OUTSIDE';
     }
 
-    // 4. Geofence validation (Check if in ANY authorized work location)
+    // 4. Geofence validation (WorkLocation table)
     let isWithinGeofence = false;
     let nearestLoc: { name: string; distanceM: number; id: number } | undefined;
 
@@ -393,9 +393,34 @@ export class AttendanceService {
       }
     }
 
-    // 5. Location guard: MUST be in office OR in a geofence OR provide a reason
+    // 4b. Branch geofence validation — must run BEFORE the location guard so
+    //     users inside a branch radius are not incorrectly forced to provide a reason.
+    let isWithinBranch = false;
+    let nearestBranch: { id: number; name: string; distanceM: number; isInOffice: boolean } | null = null;
+
+    if (hasGps) {
+      const branches = await this.prisma.branch.findMany({
+        where: { latitude: { not: null }, longitude: { not: null } },
+        select: { id: true, name: true, latitude: true, longitude: true, radius: true },
+      });
+      for (const branch of branches) {
+        if (branch.latitude == null || branch.longitude == null) continue;
+        const dist = Math.round(haversineMetres(dto.lat!, dto.lng!, branch.latitude, branch.longitude));
+        if (!nearestBranch || dist < nearestBranch.distanceM) {
+          nearestBranch = {
+            id: branch.id,
+            name: branch.name ?? 'Unknown',
+            distanceM: dist,
+            isInOffice: dist <= (branch.radius ?? 50),
+          };
+        }
+      }
+      isWithinBranch = nearestBranch?.isInOffice ?? false;
+    }
+
+    // 5. Location guard: MUST be in assigned office OR any WorkLocation OR any Branch OR provide a reason
     const locationNote = dto.locationNote?.trim();
-    if (!isInOffice && !isWithinGeofence && !locationNote) {
+    if (!isInOffice && !isWithinGeofence && !isWithinBranch && !locationNote) {
       if (!hasGps) {
         throw new BadRequestException('GPS location is required or provide a reason (Working from client, etc.)');
       }
@@ -478,26 +503,7 @@ export class AttendanceService {
       },
     });
 
-    // 10. Branch GPS detection
-    let nearestBranch: { id: number; name: string; distanceM: number; isInOffice: boolean; } | null = null;
-    if (hasGps) {
-      const branches = await this.prisma.branch.findMany({
-        where: { latitude: { not: null }, longitude: { not: null } },
-        select: { id: true, name: true, latitude: true, longitude: true, radius: true },
-      });
-      for (const branch of branches) {
-        if (branch.latitude == null || branch.longitude == null) continue;
-        const dist = Math.round(haversineMetres(dto.lat!, dto.lng!, branch.latitude, branch.longitude));
-        if (!nearestBranch || dist < nearestBranch.distanceM) {
-          nearestBranch = {
-            id: branch.id,
-            name: branch.name ?? 'Unknown',
-            distanceM: dist,
-            isInOffice: dist <= (branch.radius ?? 50),
-          };
-        }
-      }
-    }
+    // 10. nearestBranch is already computed in step 4b (moved up for location guard).
 
     return {
       attendance,
@@ -546,7 +552,7 @@ export class AttendanceService {
       }
     }
 
-    // 2. Geofence validation
+    // 2. Geofence validation (WorkLocation table)
     let isWithinGeofence = false;
     let nearestLoc: { name: string; distanceM: number; id: number } | undefined;
 
@@ -558,9 +564,26 @@ export class AttendanceService {
       }
     }
 
-    // 3. Choice: Office OR Geofence OR Reason
+    // 2b. Branch geofence validation — must run BEFORE the location guard.
+    let isWithinBranch = false;
+    if (hasGps) {
+      const branches = await this.prisma.branch.findMany({
+        where: { latitude: { not: null }, longitude: { not: null } },
+        select: { id: true, latitude: true, longitude: true, radius: true },
+      });
+      for (const branch of branches) {
+        if (branch.latitude == null || branch.longitude == null) continue;
+        const dist = haversineMetres(dto.lat!, dto.lng!, branch.latitude, branch.longitude);
+        if (dist <= (branch.radius ?? 50)) {
+          isWithinBranch = true;
+          break;
+        }
+      }
+    }
+
+    // 3. Location guard: assigned office OR WorkLocation OR Branch OR reason
     const locationNote = dto.locationNote?.trim();
-    if (!isInOffice && !isWithinGeofence && !locationNote) {
+    if (!isInOffice && !isWithinGeofence && !isWithinBranch && !locationNote) {
       throw new BadRequestException(`You are outside "${officeName}". Please provide a reason to clock out.`);
     }
 
