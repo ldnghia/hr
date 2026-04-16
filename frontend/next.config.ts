@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
   webpack: (config) => config,
 
   /**
+   * Empty turbopack config silences the "webpack config without turbopack
+   * config" error in Next.js 16 for both `next dev` and `next build`.
+   */
+  turbopack: {},
+
+  /**
    * Allow requests from LAN IPs and the custom domain on BOTH ports
    * (3000 HTTP + 3443 HTTPS). Missing port variants cause Next.js to
    * reject cross-origin dev requests with an empty response.
