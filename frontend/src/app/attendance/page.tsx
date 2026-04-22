@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
@@ -410,6 +411,7 @@ export default function AttendancePage() {
   const [locationNote, setLocationNote] = useState('');
   const [noteError, setNoteError] = useState('');
   const [forceReason, setForceReason] = useState(false);
+  const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
   // Branch list (for live GPS preview) + confirmed result from last check-in
@@ -812,7 +814,7 @@ export default function AttendancePage() {
                       variant="secondary"
                       loading={actionLoading}
                       disabled={needsReason && !locationNote.trim()}
-                      onClick={handleCheckOut}
+                      onClick={() => setShowCheckoutConfirm(true)}
                     >
                       <svg className="mr-2 h-6 w-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1105,6 +1107,38 @@ export default function AttendancePage() {
         )}
 
       </div>
+
+      {/* ── Checkout confirm modal ── */}
+      <Modal
+        open={showCheckoutConfirm}
+        onClose={() => setShowCheckoutConfirm(false)}
+        title={t('attendance.confirmCheckoutTitle', 'Xác nhận chấm công ra')}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowCheckoutConfirm(false)} disabled={actionLoading}>
+              {t('common.cancel', 'Hủy')}
+            </Button>
+            <Button
+              loading={actionLoading}
+              onClick={() => { setShowCheckoutConfirm(false); handleCheckOut(); }}
+            >
+              {t('attendance.confirmCheckout', 'Xác nhận ra')}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-sm text-gray-600">
+          <p>{t('attendance.confirmCheckoutMsg', 'Bạn có chắc muốn chấm công ra không?')}</p>
+          <div className="rounded-lg bg-gray-50 px-4 py-3 text-center">
+            <p className="text-xs text-gray-400 mb-1">{t('attendance.currentTime', 'Thời gian hiện tại')}</p>
+            <p className="text-2xl font-bold text-gray-800 tabular-nums">
+              {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+        </div>
+      </Modal>
+
     </AppShell>
   );
 }

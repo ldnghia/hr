@@ -133,7 +133,8 @@ model LeaveRequest {
   currentStep Int?            @default(1) @map("current_step")
   createdAt   DateTime?       @default(now()) @map("created_at")
   reason      String?
-  days        Int?
+  days        Float?
+  isHalfDay   Boolean?        @default(false) @map("is_half_day")
   approvals   LeaveApproval[]
   employee    Employee?       @relation(fields: [employeeId], references: [id])
 

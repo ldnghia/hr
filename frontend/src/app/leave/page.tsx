@@ -397,13 +397,13 @@ export default function LeavePage() {
 
         {/* Leave requests table */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-semibold text-gray-800">{t('leave.allRequests')}</h3>
               <select
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); reset(); }}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">{t('leave.allStatus')}</option>
                 <option value="pending">{t('common.pending')}</option>
@@ -412,14 +412,77 @@ export default function LeavePage() {
                 <option value="cancelled">{t('common.cancelled')}</option>
               </select>
             </div>
-            <Button onClick={() => setShowModal(true)}>{t('leave.requestLeave')}</Button>
+            <Button onClick={() => setShowModal(true)} size="sm">{t('leave.requestLeave')}</Button>
           </div>
 
           {loading ? (
             <PageSpinner />
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* ── Mobile card list ── */}
+              <div className="sm:hidden divide-y divide-gray-50">
+                {result?.data.length === 0 && (
+                  <p className="px-5 py-10 text-center text-sm text-gray-400">{t('leave.noRequests')}</p>
+                )}
+                {result?.data.map((leave) => (
+                  <div
+                    key={leave.id}
+                    onClick={() => router.push(`/leave/${leave.id}`)}
+                    className="px-4 py-3 space-y-2 cursor-pointer active:bg-gray-50"
+                  >
+                    {/* Row 1: employee (admin/HR only) */}
+                    {isAdminOrHR && (
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">{leave.employee?.fullName ?? `#${leave.employeeId}`}</p>
+                        <p className="text-xs text-gray-400">{leave.employee?.department?.name}</p>
+                      </div>
+                    )}
+                    {/* Row 2: type + status + days */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {statusBadge(leave.type)}
+                        {statusBadge(leave.status)}
+                        {leave.isHalfDay && (
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-purple-50 text-purple-700">
+                            ½ ngày
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-bold text-indigo-600 text-sm">{leave.days}d</span>
+                    </div>
+                    {/* Row 3: date range */}
+                    <p className="text-xs text-gray-600">
+                      {formatDate(leave.fromDate)}
+                      {leave.fromDate !== leave.toDate && (
+                        <> <span className="text-gray-400">→</span> {formatDate(leave.toDate)}</>
+                      )}
+                    </p>
+                    {/* Row 4: actions */}
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      {leave.status === 'pending' && isApprover && (
+                        <>
+                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => handleApprove(leave.id)}>
+                            {t('leave.approve')}
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => setRejectTarget(leave)}>
+                            {t('leave.reject')}
+                          </Button>
+                        </>
+                      )}
+                      {/* Pending: employee cancel own; Approved: admin only */}
+                      {((leave.status === 'pending' && leave.employeeId === user?.id) ||
+                        (leave.status === 'approved' && user?.role === 'admin')) && (
+                        <Button size="sm" variant="ghost" onClick={() => handleCancel(leave.id)}>
+                          {t('leave.cancel')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Desktop table ── */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="border-b border-gray-100 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                     <tr>
@@ -459,11 +522,7 @@ export default function LeavePage() {
                           <div className="flex gap-2">
                             {leave.status === 'pending' && isApprover && (
                               <>
-                                <Button
-                                  size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
-                                  onClick={() => handleApprove(leave.id)}
-                                >
+                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => handleApprove(leave.id)}>
                                   {t('leave.approve')}
                                 </Button>
                                 <Button size="sm" variant="danger" onClick={() => setRejectTarget(leave)}>
@@ -471,12 +530,13 @@ export default function LeavePage() {
                                 </Button>
                               </>
                             )}
-                            {(leave.status === 'pending' || leave.status === 'approved') &&
-                              leave.employeeId === user?.id && (
-                                <Button size="sm" variant="ghost" onClick={() => handleCancel(leave.id)}>
-                                  {t('leave.cancel')}
-                                </Button>
-                              )}
+                            {/* Pending: employee cancel own; Approved: admin only */}
+                            {((leave.status === 'pending' && leave.employeeId === user?.id) ||
+                              (leave.status === 'approved' && user?.role === 'admin')) && (
+                              <Button size="sm" variant="ghost" onClick={() => handleCancel(leave.id)}>
+                                {t('leave.cancel')}
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
