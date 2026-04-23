@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { attendanceService } from '@/services/attendance.service';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
-import { formatDate, formatDateTime, formatHours } from '@/utils/format';
+import { formatDate, formatDateTime, formatHours, formatDateFile } from '@/utils/format';
 import type { AttendanceRecord, PaginatedResponse } from '@/types';
 
 // ─── Status Badge Helper ──────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ export default function AttendanceReportPage() {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Attendance_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      link.setAttribute('download', `Bao_Cao_Cham_Cong_${formatDateFile()}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();

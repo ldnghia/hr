@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
@@ -410,6 +411,7 @@ export default function AttendancePage() {
   const [locationNote, setLocationNote] = useState('');
   const [noteError, setNoteError] = useState('');
   const [forceReason, setForceReason] = useState(false);
+  const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
   // Branch list (for live GPS preview) + confirmed result from last check-in
@@ -812,7 +814,7 @@ export default function AttendancePage() {
                       variant="secondary"
                       loading={actionLoading}
                       disabled={needsReason && !locationNote.trim()}
-                      onClick={handleCheckOut}
+                      onClick={() => setShowCheckoutConfirm(true)}
                     >
                       <svg className="mr-2 h-6 w-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -859,7 +861,60 @@ export default function AttendancePage() {
             <PageSpinner />
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* ── Mobile card list ── */}
+              <div className="sm:hidden divide-y divide-gray-50">
+                {myRecords?.data.length === 0 && (
+                  <p className="px-5 py-10 text-center text-sm text-gray-400">{t('attendance.noRecordsYet')}</p>
+                )}
+                {myRecords?.data.map((rec) => (
+                  <div key={rec.id} className="px-4 py-3 space-y-2">
+                    {/* Row 1: date + hours */}
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-gray-800 text-sm">{formatDate(rec.date)}</span>
+                      <span className="font-bold text-indigo-600 text-sm">{formatHours(rec.workingHours)}</span>
+                    </div>
+                    {/* Row 2: shift */}
+                    {rec.shift && (
+                      <p className="text-xs text-gray-500">
+                        {rec.shift.name}
+                        <span className="ml-1 text-gray-400">{rec.shift.startTime}–{rec.shift.endTime}</span>
+                      </p>
+                    )}
+                    {/* Row 3: checkin / checkout */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg bg-emerald-50 px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase text-emerald-500 mb-0.5">{t('attendance.checkinLabel')}</p>
+                        <p className="font-medium text-gray-700">{rec.checkinTime ? formatDateTime(rec.checkinTime).split(' ')[1] : '--:--'}</p>
+                      </div>
+                      <div className="rounded-lg bg-orange-50 px-3 py-2">
+                        <p className="text-[10px] font-semibold uppercase text-orange-500 mb-0.5">{t('attendance.checkoutLabel')}</p>
+                        <p className="font-medium text-gray-700">{rec.checkoutTime ? formatDateTime(rec.checkoutTime).split(' ')[1] : '--:--'}</p>
+                      </div>
+                    </div>
+                    {/* Row 4: status badges */}
+                    <div className="flex flex-wrap gap-1">
+                      <WfmBadges record={rec} />
+                      {rec.isInOffice !== undefined && (
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          rec.isInOffice ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                        }`}>
+                          {rec.isInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}
+                        </span>
+                      )}
+                    </div>
+                    {/* Row 5: notes */}
+                    {(rec.checkinNote || rec.checkoutNote) && (
+                      <div className="space-y-1 text-[11px] text-gray-500">
+                        {rec.checkinNote && <p className="bg-gray-50 rounded px-2 py-1"><span className="font-semibold text-gray-400">IN:</span> {rec.checkinNote}</p>}
+                        {rec.checkoutNote && <p className="bg-gray-50 rounded px-2 py-1"><span className="font-semibold text-gray-400">OUT:</span> {rec.checkoutNote}</p>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Desktop table ── */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="border-b border-gray-100 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                     <tr>
@@ -1052,6 +1107,38 @@ export default function AttendancePage() {
         )}
 
       </div>
+
+      {/* ── Checkout confirm modal ── */}
+      <Modal
+        open={showCheckoutConfirm}
+        onClose={() => setShowCheckoutConfirm(false)}
+        title={t('attendance.confirmCheckoutTitle', 'Xác nhận chấm công ra')}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowCheckoutConfirm(false)} disabled={actionLoading}>
+              {t('common.cancel', 'Hủy')}
+            </Button>
+            <Button
+              loading={actionLoading}
+              onClick={() => { setShowCheckoutConfirm(false); handleCheckOut(); }}
+            >
+              {t('attendance.confirmCheckout', 'Xác nhận ra')}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-sm text-gray-600">
+          <p>{t('attendance.confirmCheckoutMsg', 'Bạn có chắc muốn chấm công ra không?')}</p>
+          <div className="rounded-lg bg-gray-50 px-4 py-3 text-center">
+            <p className="text-xs text-gray-400 mb-1">{t('attendance.currentTime', 'Thời gian hiện tại')}</p>
+            <p className="text-2xl font-bold text-gray-800 tabular-nums">
+              {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+        </div>
+      </Modal>
+
     </AppShell>
   );
 }

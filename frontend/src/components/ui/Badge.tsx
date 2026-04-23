@@ -46,6 +46,7 @@ export function statusBadge(status: string) {
     unpaid: 'neutral',
     annual: 'info',
     sick: 'warning',
+    compensatory: 'success',
   };
   return <Badge label={status} variant={map[status] ?? 'neutral'} />;
 }

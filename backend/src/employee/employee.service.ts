@@ -229,6 +229,11 @@ export class EmployeeService {
     const employee = await this.prisma.employee.findUnique({ where: { id } });
     if (!employee) throw new NotFoundException(`Employee with ID ${id} not found`);
 
+    if (dto.code && dto.code !== employee.code) {
+      const codeTaken = await this.prisma.employee.findUnique({ where: { code: dto.code } });
+      if (codeTaken) throw new ConflictException('Mã nhân viên đã tồn tại');
+    }
+
     if (dto.email && dto.email !== employee.email) {
       const emailTaken = await this.prisma.employee.findUnique({ where: { email: dto.email } });
       if (emailTaken) throw new ConflictException('Email already in use');
@@ -254,6 +259,7 @@ export class EmployeeService {
     const updated = await this.prisma.employee.update({
       where: { id },
       data: {
+        code:         dto.code,
         fullName:     dto.fullName,
         email:        dto.email,
         phone:        dto.phone,

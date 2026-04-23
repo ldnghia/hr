@@ -12,6 +12,11 @@ export class UpdateEmployeeDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  code?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   fullName?: string;
 
   @ApiPropertyOptional()

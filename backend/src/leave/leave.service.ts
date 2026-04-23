@@ -66,18 +66,25 @@ export class LeaveService {
       throw new BadRequestException('toDate must be on or after fromDate');
     }
 
-    const days = calculateBusinessDays(fromDate, toDate);
-    if (days === 0) {
+    // Half-day: fromDate must equal toDate and counts as 0.5 day
+    if (dto.isHalfDay && dto.fromDate !== dto.toDate) {
+      throw new BadRequestException('Half-day leave must have fromDate equal to toDate');
+    }
+
+    const businessDays = calculateBusinessDays(fromDate, toDate);
+    if (businessDays === 0) {
       throw new BadRequestException(
         'Leave must include at least one business day (Mon–Fri)',
       );
     }
 
+    const days = dto.isHalfDay ? 0.5 : businessDays;
+
     // ── Resolve workflow steps (validates manager is assigned) ────────────
     const steps = await this.workflowEngine.buildSteps(employeeId);
 
-    // ── Check leave balance ───────────────────────────────────────────────
-    if (dto.leaveType !== 'unpaid') {
+    // ── Check leave balance (skip for unpaid and compensatory) ────────────
+    if (dto.leaveType !== 'unpaid' && dto.leaveType !== 'compensatory') {
       const balance = await this.prisma.leaveBalance.findUnique({
         where: { employeeId },
       });
@@ -97,6 +104,7 @@ export class LeaveService {
         type: dto.leaveType,
         reason: dto.reason,
         days,
+        isHalfDay: dto.isHalfDay ?? false,
         status: 'pending',
         currentStep: 1,
         approvals: {
@@ -200,8 +208,8 @@ export class LeaveService {
       }
 
       // Refund balance and remove attendance leave markers
-      if (request.type !== 'unpaid' && request.days) {
-        await this.leaveBalanceService.refund(employeeId, request.days);
+      if (request.type !== 'unpaid' && request.type !== 'compensatory' && request.days) {
+        await this.leaveBalanceService.refund(employeeId, Number(request.days));
       }
 
       // Remove isOnLeave markers from attendance

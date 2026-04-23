@@ -31,3 +31,5 @@ Thumbs.db
 # Prisma generated client (regenerated via prisma generate)
 backend/node_modules/
 frontend/node_modules/
+/.claude
+/.opencode

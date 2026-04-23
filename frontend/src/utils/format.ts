@@ -1,21 +1,40 @@
+/** Returns date in Vietnamese format: dd/MM/yyyy */
 export function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  const day   = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year  = d.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
+/** Returns datetime in Vietnamese format: dd/MM/yyyy HH:mm */
 export function formatDateTime(dateStr?: string | null): string {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  const day    = String(d.getDate()).padStart(2, '0');
+  const month  = String(d.getMonth() + 1).padStart(2, '0');
+  const year   = d.getFullYear();
+  const hour   = String(d.getHours()).padStart(2, '0');
+  const minute = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hour}:${minute}`;
+}
+
+/** Returns month/year in Vietnamese format: Tháng MM/yyyy */
+export function formatMonthYear(date: Date = new Date()): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year  = date.getFullYear();
+  return `Tháng ${month}/${year}`;
+}
+
+/** Returns date string for filenames: dd-MM-yyyy */
+export function formatDateFile(date: Date = new Date()): string {
+  const day   = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year  = date.getFullYear();
+  return `${day}-${month}-${year}`;
 }
 
 export function capitalise(str?: string | null): string {

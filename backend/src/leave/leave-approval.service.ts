@@ -192,8 +192,8 @@ export class LeaveApprovalService {
 
     if (!employeeId || !days) return;
 
-    // 2. Deduct leave balance (skip for unpaid leave)
-    if (leaveType !== 'unpaid') {
+    // 2. Deduct leave balance (skip for unpaid and compensatory leave)
+    if (leaveType !== 'unpaid' && leaveType !== 'compensatory') {
       await this.leaveBalanceService.deduct(employeeId, days);
     }
 

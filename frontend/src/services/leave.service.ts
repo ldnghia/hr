@@ -7,9 +7,10 @@ import type {
 } from '@/types';
 
 export interface CreateLeavePayload {
-  leaveType: 'annual' | 'sick' | 'unpaid';
+  leaveType: 'annual' | 'sick' | 'unpaid' | 'compensatory';
   fromDate: string;
   toDate: string;
+  isHalfDay?: boolean;
   reason: string;
 }
 

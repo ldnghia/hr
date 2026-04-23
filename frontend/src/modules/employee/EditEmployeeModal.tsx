@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +22,7 @@ interface EditEmployeeModalProps {
 }
 
 interface FormState {
+  code: string;
   fullName: string;
   email: string;
   phone: string;
@@ -30,6 +31,7 @@ interface FormState {
   branchId: string;
   departmentId: string;
   positionId: string;
+  managerId: string;
   telegramId: string;
   initialLeaveBalance: string;
 }
@@ -38,7 +40,7 @@ type FormErrors = Partial<Record<keyof FormState, string>>;
 
 export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEditBalance = false, onSuccess }: EditEmployeeModalProps) {
   const { t } = useTranslation();
-  const [form, setForm]         = useState<FormState>({ fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', telegramId: '', initialLeaveBalance: '' });
+  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '' });
   const [errors, setErrors]     = useState<FormErrors>({});
   const [apiError, setApiError] = useState('');
   const [saving, setSaving]     = useState(false);
@@ -46,13 +48,19 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
   const [branches, setBranches]       = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions]     = useState<Position[]>([]);
-  const [loadingDepts, setLoadingDepts]   = useState(false);
-  const [loadingPos, setLoadingPos]       = useState(false);
+  const [managers, setManagers]         = useState<Employee[]>([]);
+  const [loadingDepts, setLoadingDepts] = useState(false);
+  const [loadingPos, setLoadingPos]     = useState(false);
+  const [loadingMgr, setLoadingMgr]     = useState(false);
+  const [codeWarning, setCodeWarning]   = useState('');
+  const codeTimerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load branches once on open
   useEffect(() => {
     if (!open) return;
+    setCodeWarning('');
     setForm({
+      code:                employee.code         ?? '',
       fullName:            employee.fullName     ?? '',
       email:               employee.email        ?? '',
       phone:               employee.phone        ?? '',
@@ -61,6 +69,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
       branchId:            String(employee.branchId     ?? ''),
       departmentId:        String(employee.departmentId ?? ''),
       positionId:          String(employee.positionId   ?? ''),
+      managerId:           String(employee.managerId    ?? ''),
       telegramId:          employee.telegramId         ?? '',
       initialLeaveBalance: String(leaveBalance?.total ?? ''),
     });
@@ -68,6 +77,14 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
     setApiError('');
 
     organizationService.branches().then(setBranches).catch(() => setBranches([]));
+
+    // Load managers (role = manager only, excluding self)
+    setLoadingMgr(true);
+    employeeService
+      .list({ limit: 200, role: 'manager' })
+      .then((res) => setManagers((res.data ?? []).filter((e) => e.id !== employee.id)))
+      .catch(() => setManagers([]))
+      .finally(() => setLoadingMgr(false));
   }, [open, employee]);
 
   // Load departments when branchId changes
@@ -104,6 +121,24 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
       return next;
     });
     if (errors[key]) setErrors((e) => ({ ...e, [key]: undefined }));
+
+    // Debounce duplicate code check
+    if (key === 'code') {
+      setCodeWarning('');
+      if (codeTimerRef.current) clearTimeout(codeTimerRef.current);
+      const trimmed = value.trim();
+      if (trimmed && trimmed !== employee.code) {
+        codeTimerRef.current = setTimeout(async () => {
+          try {
+            const res = await employeeService.list({ search: trimmed, limit: 10 });
+            const duplicate = (res.data ?? []).find(
+              (e) => e.code?.toLowerCase() === trimmed.toLowerCase() && e.id !== employee.id,
+            );
+            if (duplicate) setCodeWarning(`Mã "${trimmed}" đã được dùng bởi ${duplicate.fullName}`);
+          } catch { /* ignore */ }
+        }, 500);
+      }
+    }
   }
 
   function validate(): boolean {
@@ -125,10 +160,13 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
     e.preventDefault();
     if (!validate()) return;
 
+    if (codeWarning) return; // block submit if duplicate warning active
+
     setSaving(true);
     setApiError('');
     try {
       const updated = await employeeService.update(employee.id, {
+        code:         form.code.trim() || undefined,
         fullName:     form.fullName.trim(),
         email:        form.email.trim(),
         phone:        form.phone.trim() || undefined,
@@ -137,6 +175,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
         branchId:     form.branchId     ? Number(form.branchId)     : undefined,
         departmentId: form.departmentId ? Number(form.departmentId) : undefined,
         positionId:   form.positionId   ? Number(form.positionId)   : undefined,
+        managerId:    form.managerId    ? Number(form.managerId)     : undefined,
         telegramId:   form.telegramId || undefined,
       });
 
@@ -170,6 +209,18 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
           <legend className="text-xs font-semibold uppercase tracking-wide text-gray-500">
             {t('employee.basicInfo')}
           </legend>
+          <div>
+            <Input
+              label={t('employee.employeeCode')}
+              value={form.code}
+              onChange={(e) => set('code', e.target.value.toUpperCase())}
+            />
+            {codeWarning && (
+              <p className="mt-1 text-xs text-amber-600 flex items-center gap-1">
+                <span>⚠</span> {codeWarning}
+              </p>
+            )}
+          </div>
           <Input
             label={t('profile.fullNameRequired')}
             value={form.fullName}
@@ -261,6 +312,18 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
               ]}
             />
           </div>
+          <Select
+            label={loadingMgr ? t('employee.loadingManager', 'Đang tải...') : t('employee.directManager', 'Quản lý trực tiếp')}
+            value={form.managerId}
+            onChange={(e) => set('managerId', e.target.value)}
+            options={[
+              { value: '', label: t('employee.noManager', '— Không có —') },
+              ...managers.map((m) => ({
+                value: String(m.id),
+                label: m.fullName + (m.code ? ` (${m.code})` : ''),
+              })),
+            ]}
+          />
         </fieldset>
 
         <hr className="border-gray-100" />
@@ -288,24 +351,11 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
           )}
         </fieldset>
 
-        <hr className="border-gray-100" />
-
-        {/* ── Read-only ──────────────────────────────────────── */}
-        <fieldset>
-          <legend className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">
-            {t('employee.readOnly')}
-          </legend>
-          <div>
-            <p className="text-xs text-gray-400">{t('employee.employeeCode')}</p>
-            <p className="mt-0.5 text-sm font-medium text-gray-500">{employee.code ?? '—'}</p>
-          </div>
-        </fieldset>
-
         <div className="flex justify-end gap-3 pt-1">
           <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" loading={saving}>
+          <Button type="submit" loading={saving} disabled={saving || !!codeWarning}>
             {t('common.saveChanges')}
           </Button>
         </div>

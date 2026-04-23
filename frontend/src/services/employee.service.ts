@@ -28,6 +28,7 @@ export interface CreateEmployeePayload {
 }
 
 export interface UpdateEmployeePayload {
+  code?: string;
   fullName?: string;
   email?: string;
   phone?: string;

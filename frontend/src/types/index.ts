@@ -130,7 +130,7 @@ export interface Contract {
 
 // ─── Leave ────────────────────────────────────────────────────────────────────
 
-export type LeaveType = 'annual' | 'sick' | 'unpaid';
+export type LeaveType = 'annual' | 'sick' | 'unpaid' | 'compensatory';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface LeaveApproval {
@@ -153,6 +153,7 @@ export interface LeaveRequest {
   currentStep: number;
   reason: string;
   days: number;
+  isHalfDay?: boolean;
   createdAt: string;
   employee?: Pick<Employee, 'id' | 'fullName' | 'email' | 'code' | 'department' | 'manager'>;
   approvals?: LeaveApproval[];
