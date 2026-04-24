@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 
 export default function LoginPage() {
+  console.log('LoginPage');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, login } = useAuth();
@@ -19,7 +20,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false); // ✅ FIX HYDRATION
-  
+
   // ✅ ensure render only on client
   useEffect(() => {
     setMounted(true);
