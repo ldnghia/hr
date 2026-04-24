@@ -59,7 +59,7 @@ jobs:
           cd /home/phamhai/hr/hr_project
           git pull origin main
           cd backend
-          npm ci --omit=dev
+          npm ci
           npx prisma generate
           npx prisma migrate deploy
           npm run build
