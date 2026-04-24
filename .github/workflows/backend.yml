@@ -52,29 +52,19 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        working-directory: backend
-        run: npm ci --omit=dev
-
-      - name: Generate Prisma client
-        working-directory: backend
-        run: npx prisma generate
-
-      - name: Run migrations
-        working-directory: backend
+      - name: Pull & build in project directory
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma migrate deploy
-
-      - name: Build
-        working-directory: backend
-        run: npm run build
+        run: |
+          cd /home/phamhai/hr/hr_project
+          git pull origin main
+          cd backend
+          npm ci --omit=dev
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run build
 
       - name: Restart PM2
-        working-directory: backend
         run: |
-          pm2 restart hr-backend || pm2 start dist/src/main.js --name hr-backend
+          pm2 restart hr-backend || pm2 start /home/phamhai/hr/hr_project/backend/dist/src/main.js --name hr-backend
           pm2 save
