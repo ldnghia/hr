@@ -41,21 +41,17 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build
-        working-directory: frontend
+      - name: Pull & build in project directory
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
-        run: npm run build
+        run: |
+          cd /home/phamhai/hr/hr_project
+          git pull origin main
+          cd frontend
+          npm ci
+          npm run build
 
       - name: Restart PM2
-        working-directory: frontend
         run: |
-          pm2 restart hr-frontend || pm2 start npm --name hr-frontend -- start
+          pm2 restart hr-frontend || pm2 start npm --name hr-frontend --cwd /home/phamhai/hr/hr_project/frontend -- start
           pm2 save
