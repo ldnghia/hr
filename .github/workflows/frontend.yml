@@ -11,24 +11,14 @@ on:
     paths:
       - 'frontend/**'
 
-env:
-  NODE_VERSION: '20'
-
 jobs:
   build:
     name: Build & Lint
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: frontend
@@ -41,20 +31,12 @@ jobs:
       - name: Build
         working-directory: frontend
         env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1' }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
         run: npm run build
 
-      - name: Upload build artifact
-        if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/.next
-          retention-days: 7
-
   deploy:
-    name: Deploy to Server
-    runs-on: ubuntu-latest
+    name: Deploy
+    runs-on: self-hosted
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
@@ -62,17 +44,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            cd ~/hr/hr_project
-            git pull origin main
-            cd frontend
-            npm ci
-            npm run build
-            pm2 restart hr-frontend || pm2 start npm --name hr-frontend -- start
-            pm2 save
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: npm run build
+
+      - name: Restart PM2
+        working-directory: frontend
+        run: |
+          pm2 restart hr-frontend || pm2 start npm --name hr-frontend -- start
+          pm2 save
