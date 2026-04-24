@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
 
 export default function LoginPage() {
-  console.log('LoginPage');
+  console.log('LoginPage.');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, login } = useAuth();
