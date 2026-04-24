@@ -42,7 +42,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_EXPIRES_IN: 7d
           BCRYPT_SALT_ROUNDS: 4
-          PORT: 8080
+          PORT: 3001
         run: npm test -- --passWithNoTests
 
   deploy:
