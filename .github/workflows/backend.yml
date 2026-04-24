@@ -76,5 +76,5 @@ jobs:
       - name: Restart PM2
         working-directory: backend
         run: |
-          pm2 restart hr-backend || pm2 start dist/main.js --name hr-backend
+          pm2 restart hr-backend || pm2 start dist/src/main.js --name hr-backend
           pm2 save
