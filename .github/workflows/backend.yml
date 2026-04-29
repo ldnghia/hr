@@ -57,7 +57,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           cd /home/phamhai/hr/hr_project
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
           cd backend
           npm ci
           npx prisma generate

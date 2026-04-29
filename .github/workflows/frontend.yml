@@ -46,7 +46,8 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
         run: |
           cd /home/phamhai/hr/hr_project
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
           cd frontend
           npm ci
           npm run build
