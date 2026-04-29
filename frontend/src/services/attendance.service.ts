@@ -113,6 +113,9 @@ export const attendanceService = {
   export: (params?: ReportParams) =>
     api.get('/attendance/report/export', { params, responseType: 'blob' }),
 
+  exportGrid: (params?: ReportParams) =>
+    api.get('/attendance/report/export-grid', { params, responseType: 'blob' }),
+
   list: (params?: { page?: number; limit?: number; employeeId?: number; date?: string }) =>
     api.get<PaginatedResponse<AttendanceRecord>>('/attendance', { params }).then((r) => r.data),
 

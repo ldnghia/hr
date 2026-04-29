@@ -272,6 +272,122 @@ export class AttendanceService {
     res.end();
   }
 
+  async exportGridReport(dto: ReportAttendanceDto, user: { id: number; role: string }, res: Response) {
+    const start = dto.dateFrom ? new Date(dto.dateFrom) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const end = dto.dateTo ? new Date(dto.dateTo) : new Date();
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+
+    // Build ordered day list
+    const days: Date[] = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) days.push(new Date(d));
+
+    // Fetch all records (skip late/earlyOut filters for grid)
+    const { data: records } = await this.getReport(
+      { ...dto, page: 1, limit: 10000, isLate: undefined, isEarlyOut: undefined, isOvertime: undefined },
+      user,
+    );
+
+    // Unique employees sorted by code
+    const empMap = new Map<number, any>();
+    records.forEach((r: any) => { if (r.employee && !empMap.has(r.employee.id)) empMap.set(r.employee.id, r.employee); });
+    const employees = [...empMap.values()].sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+
+    // Lookup: `${empId}_${dateISO}` → record
+    const lookup = new Map<string, any>();
+    records.forEach((r: any) => { lookup.set(`${r.employeeId}_${new Date(r.date).toISOString().split('T')[0]}`, r); });
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Bảng Chấm Công');
+
+    const FIX = 3; // STT | Họ và tên | Chức vụ
+    const thin = { style: 'thin' as const };
+    const border = { top: thin, left: thin, bottom: thin, right: thin };
+    const sunFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFC7CE' } };
+    const leaveFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFFF00' } };
+
+    const applyCell = (cell: ExcelJS.Cell, val: any, opts: Partial<ExcelJS.Style> & { value?: any } = {}) => {
+      cell.value = val;
+      cell.border = opts.border ?? border;
+      cell.alignment = opts.alignment ?? { horizontal: 'center', vertical: 'middle' };
+      if (opts.font) cell.font = opts.font;
+      if (opts.fill) cell.fill = opts.fill;
+    };
+
+    // Fixed column widths
+    ws.getColumn(1).width = 5; ws.getColumn(2).width = 22; ws.getColumn(3).width = 14;
+
+    // ── Header rows 1-3 ───────────────────────────────────────────────────────
+    [1, 2, 3].forEach(r => { ws.getRow(r).height = 18; });
+    // Fixed columns span rows 1-3
+    ['STT', 'HỌ VÀ TÊN', 'Chức vụ'].forEach((label, ci) => {
+      ws.mergeCells(1, ci + 1, 3, ci + 1);
+      applyCell(ws.getCell(1, ci + 1), label, { font: { bold: true, size: 9 } });
+    });
+
+    days.forEach((day, i) => {
+      const colS = FIX + 1 + i * 2;
+      const dow = day.getDay(); // 0=Sun
+      const isSun = dow === 0;
+      const dowLabel = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][dow];
+      const sunFont = { bold: true, size: 9, color: { argb: 'FFCC0000' } };
+      const normFont = { bold: true, size: 9 };
+
+      // Row 1: day-of-week (merged S+C)
+      ws.mergeCells(1, colS, 1, colS + 1);
+      applyCell(ws.getCell(1, colS), dowLabel, { font: isSun ? sunFont : normFont, ...(isSun && { fill: sunFill }) });
+
+      // Row 2: date number (merged S+C)
+      ws.mergeCells(2, colS, 2, colS + 1);
+      applyCell(ws.getCell(2, colS), String(day.getDate()).padStart(2, '0'), {
+        font: isSun ? sunFont : normFont, ...(isSun && { fill: sunFill }),
+      });
+
+      // Row 3: S / C headers
+      ['S', 'C'].forEach((sc, si) => {
+        const col = colS + si;
+        ws.getColumn(col).width = 4;
+        applyCell(ws.getCell(3, col), sc, { font: isSun ? sunFont : normFont, ...(isSun && { fill: sunFill }) });
+      });
+    });
+
+    // ── Data rows ─────────────────────────────────────────────────────────────
+    employees.forEach((emp, idx) => {
+      const row = ws.getRow(4 + idx);
+      row.height = 16;
+      [emp.code ? idx + 1 : idx + 1, emp.fullName || '', emp.position?.name || ''].forEach((v, ci) => {
+        applyCell(row.getCell(ci + 1), v, { alignment: { horizontal: ci === 0 ? 'center' : 'left', vertical: 'middle' }, font: { size: 9 } });
+      });
+
+      days.forEach((day, di) => {
+        const ds = day.toISOString().split('T')[0];
+        const rec = lookup.get(`${emp.id}_${ds}`);
+        const colS = FIX + 1 + di * 2;
+        const isSun = day.getDay() === 0;
+
+        let sVal = '', cVal = '', isLeave = false;
+        if (rec) {
+          if (rec.isOnLeave) { sVal = 'P'; cVal = 'P'; isLeave = true; }
+          else { if (rec.checkinTime) sVal = '/'; if (rec.checkoutTime) cVal = '/'; }
+        }
+
+        [sVal, cVal].forEach((v, si) => {
+          const cell = row.getCell(colS + si);
+          applyCell(cell, v, {
+            font: isLeave ? { bold: true, size: 9, color: { argb: 'FFCC6600' } } : { size: 9 },
+            ...(isLeave ? { fill: leaveFill } : isSun ? { fill: sunFill } : {}),
+          });
+        });
+      });
+    });
+
+    const filename = `Bang_Cham_Cong_${start.getFullYear()}_${String(start.getMonth() + 1).padStart(2, '0')}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    await wb.xlsx.write(res);
+    res.end();
+  }
+
   // ─── Queries ──────────────────────────────────────────────────────────────
 
   async findAll(query: PaginationDto & { employeeId?: number; date?: string }) {
