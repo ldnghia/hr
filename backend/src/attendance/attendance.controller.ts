@@ -181,7 +181,7 @@ export class AttendanceController {
   }
 
   @Get('report/export')
-  @Roles('admin', 'hr', 'manager')
+  @Roles('admin')
   @ApiOperation({ summary: 'Export attendance report to Excel (list format)' })
   exportReport(
     @Query() dto: ReportAttendanceDto,
@@ -192,7 +192,7 @@ export class AttendanceController {
   }
 
   @Get('report/export-grid')
-  @Roles('admin', 'hr', 'manager')
+  @Roles('admin')
   @ApiOperation({ summary: 'Export attendance report to Excel (grid/matrix format)' })
   exportGridReport(
     @Query() dto: ReportAttendanceDto,
@@ -200,6 +200,17 @@ export class AttendanceController {
     @Res() res: any,
   ) {
     return this.attendanceService.exportGridReport(dto, user, res);
+  }
+
+  @Get('report/export-summary')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Export summary working-day report to Excel' })
+  exportSummaryReport(
+    @Query() dto: ReportAttendanceDto,
+    @CurrentUser() user: { id: number; role: string },
+    @Res() res: any,
+  ) {
+    return this.attendanceService.exportSummaryReport(dto, user, res);
   }
 
   // ── GET /attendance ───────────────────────────────────────────────────────

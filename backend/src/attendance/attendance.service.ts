@@ -388,6 +388,149 @@ export class AttendanceService {
     res.end();
   }
 
+  async exportSummaryReport(dto: ReportAttendanceDto, user: { id: number; role: string }, res: Response) {
+    const start = dto.dateFrom ? new Date(dto.dateFrom) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const end = dto.dateTo ? new Date(dto.dateTo) : new Date();
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+
+    // 1. Calendar days in range → working days + holiday days count
+    const calDays = await this.prisma.calendarDay.findMany({ where: { date: { gte: start, lte: end } } });
+    const calMap = new Map(calDays.map(d => [d.date.toISOString().split('T')[0], d]));
+    let officialWorkingDays = 0; let officialHolidayDays = 0;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const ds = d.toISOString().split('T')[0];
+      const cal = calMap.get(ds);
+      const dow = d.getDay();
+      if (!cal) { if (dow !== 0 && dow !== 6) officialWorkingDays++; continue; }
+      if (cal.type === 'WORKING' || cal.type === 'COMPENSATION') officialWorkingDays++;
+      else if (cal.type === 'HOLIDAY' && cal.isPaid) officialHolidayDays++;
+    }
+
+    // 2. All attendance records (no filters)
+    const { data: records } = await this.getReport({ ...dto, page: 1, limit: 10000, isLate: undefined, isEarlyOut: undefined }, user);
+
+    // 3. Approved leave requests overlapping range
+    const leaveReqs = await this.prisma.leaveRequest.findMany({
+      where: {
+        status: 'approved',
+        OR: [
+          { fromDate: { gte: start, lte: end } },
+          { toDate: { gte: start, lte: end } },
+          { fromDate: { lte: start }, toDate: { gte: end } },
+        ],
+      },
+      include: { employee: { select: { id: true, code: true, fullName: true, position: { select: { name: true } } } } },
+    });
+
+    // 4. Build employee map
+    const empMap = new Map<number, any>();
+    records.forEach((r: any) => { if (r.employee) empMap.set(r.employee.id, r.employee); });
+    leaveReqs.forEach(lr => { if (lr.employee) empMap.set(lr.employee.id, lr.employee); });
+    const employees = [...empMap.values()].sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+
+    // 5. Attendance lookup: empId_date → record
+    const attMap = new Map<string, any>();
+    records.forEach((r: any) => { attMap.set(`${r.employeeId}_${new Date(r.date).toISOString().split('T')[0]}`, r); });
+
+    // 6. Per-employee summary
+    const summaries = employees.map(emp => {
+      let ngayCong = 0;
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const ds = d.toISOString().split('T')[0]; const cal = calMap.get(ds); const dow = d.getDay();
+        const isWorking = cal ? (cal.type === 'WORKING' || cal.type === 'COMPENSATION') : (dow !== 0 && dow !== 6);
+        if (!isWorking) continue;
+        const rec = attMap.get(`${emp.id}_${ds}`);
+        if (rec?.checkinTime && !rec.isOnLeave) ngayCong++;
+      }
+      const empLeaves = leaveReqs.filter(lr => lr.employeeId === emp.id);
+      const leaveDays = (type: string) => empLeaves.filter(l => l.type === type).reduce((s, l) => s + Number(l.days || 0), 0);
+      const annual = leaveDays('annual'); const sick = leaveDays('sick');
+      const comp = leaveDays('compensatory'); const unpaid = leaveDays('unpaid');
+      const accounted = ngayCong + annual + sick + comp + unpaid + officialHolidayDays;
+      const unexcused = Math.max(0, officialWorkingDays - accounted);
+      return { emp, ngayCong, annual, holiday: officialHolidayDays, sick, comp, unpaid, unexcused,
+        total: parseFloat((ngayCong + annual + officialHolidayDays + sick + comp).toFixed(1)) };
+    });
+
+    // 7. Excel
+    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('Báo Cáo Ngày Công');
+    const thin = { style: 'thin' as const }; const border = { top: thin, left: thin, bottom: thin, right: thin };
+    const COLS = [
+      { h: 'STT', w: 5 }, { h: 'Họ và tên', w: 22 }, { h: 'Chức vụ', w: 14 },
+      { h: 'Ngày\ncông', w: 8 },
+      { h: 'Nghỉ phép\nnăm', w: 10 }, { h: 'Nghỉ\nốm', w: 8 },
+      { h: 'Nghỉ\nbù', w: 8 }, { h: 'Nghỉ không\nlương', w: 11 },
+      { h: 'Nghỉ\nlễ, Tết', w: 9 },
+      { h: 'Nghỉ không\nlý do', w: 11 }, { h: 'Cộng ngày\ncông hưởng', w: 12 },
+    ];
+    COLS.forEach((c, i) => { ws.getColumn(i + 1).width = c.w; });
+
+    // Title
+    ws.mergeCells(1, 1, 1, COLS.length);
+    const tc = ws.getCell(1, 1);
+    tc.value = `BÁO CÁO NGÀY CÔNG THÁNG ${start.getMonth() + 1}/${start.getFullYear()}`;
+    tc.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+    tc.alignment = { horizontal: 'center', vertical: 'middle' };
+    tc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3949AB' } };
+    ws.getRow(1).height = 28;
+
+    // Sub-title
+    ws.mergeCells(2, 1, 2, COLS.length);
+    const sc = ws.getCell(2, 1);
+    sc.value = `${formatDate(start)} — ${formatDate(end)}  |  Ngày làm việc: ${officialWorkingDays}  |  Ngày lễ: ${officialHolidayDays}`;
+    sc.font = { size: 9, italic: true, color: { argb: 'FF666666' } };
+    sc.alignment = { horizontal: 'center', vertical: 'middle' };
+    sc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+    ws.getRow(2).height = 16;
+
+    // Header
+    ws.getRow(3).height = 36;
+    COLS.forEach((c, i) => {
+      const cell = ws.getCell(3, i + 1);
+      cell.value = c.h; cell.border = border;
+      cell.font = { bold: true, size: 9 }; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBBC8F5' } };
+    });
+
+    // Data rows
+    summaries.forEach((s, idx) => {
+      const row = ws.getRow(4 + idx); row.height = 16;
+      const vals = [idx+1, s.emp.fullName||'', s.emp.position?.name||'',
+        s.ngayCong, s.annual, s.sick, s.comp, s.unpaid, s.holiday, s.unexcused, s.total];
+      vals.forEach((v, ci) => {
+        const cell = row.getCell(ci + 1);
+        cell.value = typeof v === 'number' ? (v === 0 ? 0 : parseFloat(v.toFixed(1))) : v;
+        cell.border = border;
+        cell.font = { size: 9, ...(ci===9 && (v as number)>0 ? { bold: true, color: { argb: 'FFCC0000' } } : {}),
+                                 ...(typeof v === 'number' && v===0 ? { color: { argb: 'FFAAAAAA' } } : {}) };
+        cell.alignment = { horizontal: ci < 3 ? (ci===0 ? 'center' : 'left') : 'center', vertical: 'middle' };
+        if (ci === 10) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECEFF1' } };
+      });
+    });
+
+    // Total row
+    const tr = ws.getRow(4 + summaries.length); tr.height = 18;
+    ws.mergeCells(4+summaries.length, 1, 4+summaries.length, 3);
+    const tl = tr.getCell(1);
+    tl.value = 'TỔNG CỘNG'; tl.border = border;
+    tl.font = { bold: true, size: 9 }; tl.alignment = { horizontal: 'center', vertical: 'middle' };
+    tl.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
+    [3,4,5,6,7,8,9,10].forEach((ci, i) => {
+      const cell = tr.getCell(ci+1);
+      const field = (['ngayCong','annual','sick','comp','unpaid','holiday','unexcused','total'] as const)[i];
+      cell.value = parseFloat(summaries.reduce((a,s)=>a+s[field],0).toFixed(1));
+      cell.border = border; cell.font = { bold: true, size: 9 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
+    });
+
+    const fn = `Bao_Cao_Ngay_Cong_T${String(start.getMonth()+1).padStart(2,'0')}_${start.getFullYear()}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${fn}`);
+    await wb.xlsx.write(res); res.end();
+  }
+
   // ─── Queries ──────────────────────────────────────────────────────────────
 
   async findAll(query: PaginationDto & { employeeId?: number; date?: string }) {

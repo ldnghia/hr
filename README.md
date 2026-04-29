@@ -1,352 +1,547 @@
+# HR Management System — Dcorp
+
+Production-ready HR management platform for ~150 employees across 2 branches (HCM & HN).
+
+**Latest**: v1.0-beta | **Status**: Active Development (72% complete)
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+
+- PostgreSQL 12+
+- Docker & Docker Compose (optional)
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/dcorp/hr-project.git
+cd hr-project
+
+# Backend
+cd backend && npm install && npx prisma generate
+cd ..
+
+# Frontend
+cd frontend && npm install
+cd ..
+```
+
+### 2. Environment Setup
+**Backend** (`backend/.env.local`):
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/hr_db"
+JWT_SECRET="your-secret-key-here"
+PORT=3000
+CORS_ORIGIN="http://localhost:3001"
+NODE_ENV="development"
+```
+
+**Frontend** (`frontend/.env.local`):
+```env
+NEXT_PUBLIC_API_URL="http://localhost:3000/api/v1"
+```
+
+### 3. Database
+```bash
+cd backend
+createdb hr_db
+npx prisma migrate dev    # Run migrations
+npx prisma db seed        # Optional: seed test data
+```
+
+### 4. Run
+```bash
+# Terminal 1: Backend
+cd backend && npm run start:dev
+# → http://localhost:3000/api/docs (Swagger)
+
+# Terminal 2: Frontend
+cd frontend && npm run dev
+# → http://localhost:3001
+```
+
+**Test Credentials** (after seeding):
+- Admin: `admin@dcorp.vn` / `admin123`
+- HR: `hr@dcorp.vn` / `hr123`
+- Manager: `manager@dcorp.vn` / `manager123`
+- Employee: `emp1@dcorp.vn` / `emp123`
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| **Backend** | NestJS | 10.3 |
+| **Frontend** | Next.js | 16.2 |
+| **Database** | PostgreSQL | 12+ |
+| **ORM** | Prisma | 5.10 |
+| **Auth** | JWT (Passport) | - |
+| **UI** | React + TailwindCSS | 19 + 4.x |
+| **HTTP** | Axios | 1.14 |
+| **i18n** | i18next | 26 |
+
+---
+
+## Project Structure
 
 ```
-hr-project
-├─ .claude
-│  ├─ commands
-│  │  ├─ crud.md
-│  │  ├─ debug.md
-│  │  ├─ init.md
-│  │  ├─ optimize.md
-│  │  └─ workflow.md
-│  ├─ context.md
-│  ├─ settings.local.json
-│  └─ system.md
-├─ CHANGELOG.md
-├─ backend
-│  ├─ .claude
-│  │  ├─ commands
-│  │  │  ├─ crud.md
-│  │  │  ├─ debug.md
-│  │  │  ├─ init.md
-│  │  │  ├─ optimize.md
-│  │  │  └─ workflow.md
-│  │  ├─ context.md
-│  │  ├─ rules.md
-│  │  ├─ settings.local.json
-│  │  └─ system.md
-│  ├─ CLAUDE.md
-│  ├─ nest-cli.json
-│  ├─ package-lock.json
-│  ├─ package.json
-│  ├─ prisma
-│  │  ├─ migrations
-│  │  │  ├─ 20240101000000_init
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240102000000_leave_workflow_redesign
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240103000000_add_auth_and_leave_columns
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240104000000_add_audit_log_details
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240105000000_attendance_unique_and_processor
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240106000000_offboarding_workflow_and_history
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240107000000_add_office_location
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240108000000_add_office_gps_to_attendance
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240109000000_add_branch_gps
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20240110000000_add_attendance_location_note
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20250402000000_enhance_department_position
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20250402000001_enhance_shift_employee
-│  │  │  │  └─ migration.sql
-│  │  │  ├─ 20250403000000_add_working_shift_fields
-│  │  │  │  └─ migration.sql
-│  │  │  └─ migration_lock.toml
-│  │  ├─ schema.prisma
-│  │  └─ seed.ts
-│  ├─ src
-│  │  ├─ app.module.ts
-│  │  ├─ attendance
-│  │  │  ├─ attendance-processor.service.ts
-│  │  │  ├─ attendance.controller.ts
-│  │  │  ├─ attendance.module.ts
-│  │  │  ├─ attendance.service.ts
-│  │  │  ├─ dto
-│  │  │  │  ├─ attendance-list.dto.ts
-│  │  │  │  ├─ check-in-out.dto.ts
-│  │  │  │  ├─ check-in.dto.ts
-│  │  │  │  ├─ check-out.dto.ts
-│  │  │  │  ├─ create-location.dto.ts
-│  │  │  │  ├─ create-shift.dto.ts
-│  │  │  │  ├─ import-attendance.dto.ts
-│  │  │  │  └─ report-attendance.dto.ts
-│  │  │  ├─ location.service.ts
-│  │  │  └─ shift.service.ts
-│  │  ├─ audit
-│  │  │  ├─ audit.controller.ts
-│  │  │  ├─ audit.module.ts
-│  │  │  ├─ audit.service.ts
-│  │  │  └─ dto
-│  │  │     └─ audit-list.dto.ts
-│  │  ├─ auth
-│  │  │  ├─ auth.controller.ts
-│  │  │  ├─ auth.module.ts
-│  │  │  ├─ auth.service.ts
-│  │  │  ├─ decorators
-│  │  │  │  └─ public.decorator.ts
-│  │  │  ├─ dto
-│  │  │  │  ├─ change-password.dto.ts
-│  │  │  │  └─ login.dto.ts
-│  │  │  ├─ guards
-│  │  │  │  ├─ jwt-auth.guard.ts
-│  │  │  │  └─ roles.guard.ts
-│  │  │  └─ strategies
-│  │  │     └─ jwt.strategy.ts
-│  │  ├─ calendar
-│  │  │  ├─ calendar.controller.ts
-│  │  │  ├─ calendar.module.ts
-│  │  │  ├─ calendar.service.ts
-│  │  │  ├─ dto
-│  │  │  │  ├─ create-calendar-year.dto.ts
-│  │  │  │  ├─ create-holiday.dto.ts
-│  │  │  │  └─ update-calendar-day.dto.ts
-│  │  │  └─ holiday.service.ts
-│  │  ├─ common
-│  │  │  ├─ decorators
-│  │  │  │  ├─ current-user.decorator.ts
-│  │  │  │  └─ roles.decorator.ts
-│  │  │  ├─ dto
-│  │  │  │  └─ pagination.dto.ts
-│  │  │  ├─ filters
-│  │  │  │  └─ http-exception.filter.ts
-│  │  │  └─ interceptors
-│  │  │     └─ logging.interceptor.ts
-│  │  ├─ contract
-│  │  │  ├─ contract.controller.ts
-│  │  │  ├─ contract.module.ts
-│  │  │  ├─ contract.service.ts
-│  │  │  └─ dto
-│  │  │     ├─ contract-list.dto.ts
-│  │  │     └─ create-contract.dto.ts
-│  │  ├─ employee
-│  │  │  ├─ dto
-│  │  │  │  ├─ admin-update-employee.dto.ts
-│  │  │  │  ├─ change-password.dto.ts
-│  │  │  │  ├─ create-employee.dto.ts
-│  │  │  │  ├─ list-employee.dto.ts
-│  │  │  │  └─ update-employee.dto.ts
-│  │  │  ├─ employee.controller.ts
-│  │  │  ├─ employee.module.ts
-│  │  │  └─ employee.service.ts
-│  │  ├─ leave
-│  │  │  ├─ dto
-│  │  │  │  ├─ action-leave.dto.ts
-│  │  │  │  ├─ adjust-balance.dto.ts
-│  │  │  │  ├─ create-leave-request.dto.ts
-│  │  │  │  └─ list-leave-request.dto.ts
-│  │  │  ├─ leave-approval.service.ts
-│  │  │  ├─ leave-balance.service.ts
-│  │  │  ├─ leave.controller.ts
-│  │  │  ├─ leave.module.ts
-│  │  │  ├─ leave.service.ts
-│  │  │  └─ workflow-engine.service.ts
-│  │  ├─ main.ts
-│  │  ├─ me
-│  │  │  ├─ dto
-│  │  │  │  ├─ change-my-password.dto.ts
-│  │  │  │  └─ update-me.dto.ts
-│  │  │  ├─ me.controller.ts
-│  │  │  └─ me.module.ts
-│  │  ├─ offboarding
-│  │  │  ├─ dto
-│  │  │  │  ├─ approve-resignation.dto.ts
-│  │  │  │  ├─ create-checklist-item.dto.ts
-│  │  │  │  ├─ create-resignation.dto.ts
-│  │  │  │  └─ process-resignation.dto.ts
-│  │  │  ├─ offboarding-approval.service.ts
-│  │  │  ├─ offboarding.controller.ts
-│  │  │  ├─ offboarding.module.ts
-│  │  │  └─ offboarding.service.ts
-│  │  ├─ office
-│  │  │  ├─ dto
-│  │  │  │  └─ create-office.dto.ts
-│  │  │  ├─ office.controller.ts
-│  │  │  ├─ office.module.ts
-│  │  │  └─ office.service.ts
-│  │  ├─ organization
-│  │  │  ├─ dto
-│  │  │  │  ├─ create-branch.dto.ts
-│  │  │  │  ├─ create-department.dto.ts
-│  │  │  │  ├─ create-position.dto.ts
-│  │  │  │  ├─ update-department.dto.ts
-│  │  │  │  └─ update-position.dto.ts
-│  │  │  ├─ organization.controller.ts
-│  │  │  ├─ organization.module.ts
-│  │  │  └─ organization.service.ts
-│  │  ├─ prisma
-│  │  │  ├─ prisma.module.ts
-│  │  │  └─ prisma.service.ts
-│  │  ├─ reward
-│  │  │  ├─ dto
-│  │  │  │  ├─ create-decision.dto.ts
-│  │  │  │  └─ reward-list.dto.ts
-│  │  │  ├─ reward.controller.ts
-│  │  │  ├─ reward.module.ts
-│  │  │  └─ reward.service.ts
-│  │  ├─ workflow
-│  │  │  ├─ dto
-│  │  │  │  └─ create-flow.dto.ts
-│  │  │  ├─ workflow.controller.ts
-│  │  │  ├─ workflow.module.ts
-│  │  │  └─ workflow.service.ts
-│  │  └─ working-shift
-│  │     ├─ dto
-│  │     │  ├─ create-working-shift.dto.ts
-│  │     │  └─ update-working-shift.dto.ts
-│  │     ├─ working-shift.controller.ts
-│  │     ├─ working-shift.module.ts
-│  │     └─ working-shift.service.ts
-│  ├─ tsconfig.build.json
-│  └─ tsconfig.json
-├─ frontend
-│  ├─ .claude
-│  │  ├─ commands
-│  │  │  ├─ crud.md
-│  │  │  ├─ debug.md
-│  │  │  ├─ init.md
-│  │  │  ├─ optimize.md
-│  │  │  └─ workflow.md
-│  │  ├─ context.md
-│  │  ├─ rules.md
-│  │  ├─ settings.local.json
-│  │  └─ system.md
-│  ├─ AGENTS.md
-│  ├─ CLAUDE.md
-│  ├─ README.md
-│  ├─ certificates
-│  │  ├─ dcorp.vn-key.pem
-│  │  └─ dcorp.vn.pem
-│  ├─ eslint.config.mjs
-│  ├─ next-env.d.ts
-│  ├─ next.config.ts
-│  ├─ package-lock.json
-│  ├─ package.json
-│  ├─ postcss.config.mjs
-│  ├─ public
-│  │  ├─ file.svg
-│  │  ├─ globe.svg
-│  │  ├─ icons
-│  │  │  ├─ icon-maskable.svg
-│  │  │  └─ icon.svg
-│  │  ├─ manifest.json
-│  │  ├─ next.svg
-│  │  ├─ offline.html
-│  │  ├─ sw.js
-│  │  ├─ vercel.svg
-│  │  └─ window.svg
-│  ├─ scripts
-│  │  └─ gen-cert.sh
-│  ├─ server-https.mjs
-│  ├─ src
-│  │  ├─ app
-│  │  │  ├─ Providers.tsx
-│  │  │  ├─ api
-│  │  │  │  └─ v1
-│  │  │  │     └─ [...path]
-│  │  │  │        └─ route.ts
-│  │  │  ├─ attendance
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ branches
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ calendar
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ dashboard
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ departments
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ employees
-│  │  │  │  ├─ [id]
-│  │  │  │  │  └─ page.tsx
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ error.tsx
-│  │  │  ├─ favicon.ico
-│  │  │  ├─ globals.css
-│  │  │  ├─ layout.tsx
-│  │  │  ├─ leave
-│  │  │  │  ├─ [id]
-│  │  │  │  │  └─ page.tsx
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ loading.tsx
-│  │  │  ├─ login
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ offboarding
-│  │  │  │  └─ page.tsx
-│  │  │  ├─ page.tsx
-│  │  │  ├─ positions
-│  │  │  │  └─ page.tsx
-│  │  │  └─ working-shifts
-│  │  │     └─ page.tsx
-│  │  ├─ components
-│  │  │  ├─ layout
-│  │  │  │  ├─ AppShell.tsx
-│  │  │  │  ├─ Sidebar.tsx
-│  │  │  │  └─ Topbar.tsx
-│  │  │  ├─ pwa
-│  │  │  │  └─ ServiceWorkerRegistration.tsx
-│  │  │  └─ ui
-│  │  │     ├─ Alert.tsx
-│  │  │     ├─ Badge.tsx
-│  │  │     ├─ Button.tsx
-│  │  │     ├─ Card.tsx
-│  │  │     ├─ Input.tsx
-│  │  │     ├─ Modal.tsx
-│  │  │     ├─ Pagination.tsx
-│  │  │     ├─ Select.tsx
-│  │  │     ├─ Spinner.tsx
-│  │  │     ├─ Table.tsx
-│  │  │     └─ Tabs.tsx
-│  │  ├─ context
-│  │  │  └─ AuthContext.tsx
-│  │  ├─ hooks
-│  │  │  ├─ useAuth.ts
-│  │  │  ├─ useGeolocation.ts
-│  │  │  └─ usePagination.ts
-│  │  ├─ lib
-│  │  │  └─ axios.ts
-│  │  ├─ middleware.ts
-│  │  ├─ modules
-│  │  │  ├─ auth
-│  │  │  ├─ dashboard
-│  │  │  ├─ employee
-│  │  │  │  ├─ ChangePasswordModal.tsx
-│  │  │  │  ├─ CreateEmployeeModal.tsx
-│  │  │  │  ├─ EditEmployeeModal.tsx
-│  │  │  │  ├─ EmployeeAvatar.tsx
-│  │  │  │  ├─ EmployeeHistory.tsx
-│  │  │  │  ├─ EmployeeProfile.tsx
-│  │  │  │  └─ EmployeeTable.tsx
-│  │  │  └─ leave
-│  │  │     ├─ CreateLeaveModal.tsx
-│  │  │     ├─ LeaveTimeline.tsx
-│  │  │     ├─ PendingApprovals.tsx
-│  │  │     └─ RejectModal.tsx
-│  │  ├─ services
-│  │  │  ├─ attendance.service.ts
-│  │  │  ├─ audit.service.ts
-│  │  │  ├─ auth.service.ts
-│  │  │  ├─ calendar.service.ts
-│  │  │  ├─ contract.service.ts
-│  │  │  ├─ employee.service.ts
-│  │  │  ├─ leave.service.ts
-│  │  │  ├─ offboarding.service.ts
-│  │  │  ├─ organization.service.ts
-│  │  │  └─ working-shift.service.ts
-│  │  ├─ types
-│  │  │  └─ index.ts
-│  │  └─ utils
-│  │     ├─ cn.ts
-│  │     ├─ format.ts
-│  │     ├─ rbac.ts
-│  │     └─ token.ts
-│  ├─ tsconfig.json
-│  └─ tsconfig.tsbuildinfo
-├─ hr-project.code-workspace
-├─ mobile
-└─ prompt_mobile_wfm.md
-
+hr-project/
+├── backend/              # NestJS API
+│   ├── src/
+│   │   ├── main.ts       # Bootstrap (CORS, Swagger, Guards)
+│   │   ├── app.module.ts # 18 module imports
+│   │   └── [18 modules]  # auth, employee, leave, attendance, etc.
+│   └── prisma/
+│       ├── schema.prisma # 35 models
+│       └── migrations/   # 13 migrations
+│
+├── frontend/             # Next.js App
+│   ├── src/
+│   │   ├── app/          # 18 pages (dashboard, login, employees, etc.)
+│   │   ├── components/   # UI (Button, Input, Modal, Table, etc.)
+│   │   ├── services/     # 12 API services
+│   │   ├── types/        # Single source of truth (338 LOC)
+│   │   └── utils/        # RBAC, token, format
+│   └── public/           # PWA manifest, service worker
+│
+└── docs/                 # Documentation
+    ├── project-overview-pdr.md
+    ├── codebase-summary.md
+    ├── code-standards.md
+    ├── system-architecture.md
+    ├── deployment-guide.md
+    ├── design-guidelines.md
+    └── project-roadmap.md
 ```
+
+---
+
+## Key Features
+
+### Completed ✓
+- Employee management (profiles, history, CRUD)
+- Authentication (JWT, role-based access)
+- Organization structure (branches, departments, positions)
+- Leave requests with 2-step approval
+- Attendance check-in/out (GPS-based, shift-based)
+- Dashboard with stats & pending approvals
+- Audit logs (all mutations tracked)
+- Multi-language support (EN/VI)
+
+### In Progress 🟡 (v1.0-beta)
+- Offboarding workflows
+- Contract management
+- Calendar & holidays
+- Advanced attendance reports
+- Telegram notifications
+
+### Planned 🔄 (v1.1+)
+- Mobile app (React Native)
+- Payroll module
+- 2FA for admins
+- Advanced analytics
+
+---
+
+## API Documentation
+
+**Swagger UI**: http://localhost:3000/api/docs (interactive)
+
+**Global Prefix**: `/api/v1`
+
+**Response Format**:
+```json
+// Paginated list
+{
+  "data": [...],
+  "meta": { "total": 150, "page": 1, "limit": 10, "totalPages": 15 }
+}
+
+// Single/Action
+{ "data": {...} } or { "message": "Success" }
+
+// Error
+{ "statusCode": 400, "error": "Bad Request", "message": "..." }
+```
+
+**Authentication**: Bearer token in `Authorization` header
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:3000/api/v1/employees
+```
+
+---
+
+## Modules (18 Total)
+
+| Module | Purpose | Status |
+|--------|---------|--------|
+| auth | Login, JWT, roles | ✓ |
+| employee | Profiles, history | ✓ |
+| organization | Branches, depts, positions | ✓ |
+| leave | Requests, approvals, balance | 🟡 80% |
+| attendance | Check-in/out, shifts, GPS | 🟡 75% |
+| offboarding | Resignation, exit checklist | 🟡 70% |
+| contract | Contract lifecycle | 🟡 50% |
+| calendar | Holidays, working days | 🟡 40% |
+| workflow | Approval flow config | 🔴 30% |
+| reward | Decisions, bonuses | 🔴 20% |
+| office | Locations, GPS | ✓ |
+| working-shift | Shift management | ✓ |
+| audit | Change log | ✓ |
+| me | Current user endpoints | ✓ |
+| notification | Telegram alerts | 🔴 25% |
+| system-config | Global settings | ✓ |
+| prisma | ORM | ✓ |
+| common | Filters, guards, decorators | ✓ |
+
+---
+
+## Development Workflow
+
+### Before Starting
+1. Read `docs/code-standards.md` (10 min)
+2. Read `docs/project-overview-pdr.md` (5 min)
+3. Review open issues in task tracker
+
+### Making Changes
+```bash
+# Create feature branch
+git checkout -b feat/employee-import
+
+# Make changes (follow code-standards.md)
+# Test locally
+
+# Lint & format
+npm run lint --fix
+npm run format
+
+# Run tests
+npm test
+
+# Commit (conventional format)
+git commit -m "feat(employee): add bulk import via CSV"
+
+# Create PR (describe changes, link issues)
+git push origin feat/employee-import
+```
+
+### Code Review Checklist
+- [ ] Follows code standards (code-standards.md)
+- [ ] No hardcoded secrets (.env vars only)
+- [ ] Database migrations included (if schema change)
+- [ ] Tests passing (npm test)
+- [ ] No TypeScript errors (strict mode)
+- [ ] Documentation updated (README, CHANGELOG)
+
+---
+
+## Configuration
+
+### Environment Variables
+
+**Backend** (`.env.local` required):
+```env
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/hr_db
+
+# JWT
+JWT_SECRET=<256-bit random string>
+JWT_EXPIRY=24h
+
+# Server
+PORT=3000
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:3001
+
+# Features (optional)
+TELEGRAM_BOT_TOKEN=
+BCRYPT_ROUNDS=12
+```
+
+**Frontend** (`.env.local` optional):
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+```
+
+**Never commit .env files to git.**
+
+---
+
+## Database Migrations
+
+```bash
+cd backend
+
+# Create migration after schema changes
+npx prisma migrate dev --name add_field_name
+
+# View schema in UI (useful for debugging)
+npx prisma studio
+
+# Reset database (dev only, ⚠️ deletes all data)
+npx prisma migrate reset --force
+```
+
+---
+
+## Testing
+
+```bash
+cd backend
+
+# Run unit tests
+npm test
+
+# Watch mode
+npm test:watch
+
+# Coverage report
+npm test:cov
+```
+
+**Target**: 70% coverage of critical services (LeaveService, AttendanceService, etc.)
+
+---
+
+## Building for Production
+
+```bash
+# Backend
+cd backend
+npm run build
+npm run start:prod
+
+# Frontend
+cd frontend
+npm run build
+npm run start   # Requires build to exist
+```
+
+---
+
+## Deployment
+
+### Local Docker
+```bash
+docker-compose up -d
+# Services: PostgreSQL, Backend, Frontend, Nginx
+```
+
+### Manual Deployment
+See `docs/deployment-guide.md` for:
+- Environment setup
+- Database migrations (production)
+- SSL/HTTPS configuration
+- Backup strategy
+- Monitoring & logging
+- Rollback procedures
+
+---
+
+## Troubleshooting
+
+### Backend won't start
+```bash
+# Check env vars
+echo $DATABASE_URL
+
+# Check database connection
+psql $DATABASE_URL -c "SELECT 1"
+
+# Check migrations
+npx prisma migrate status
+```
+
+### Frontend can't reach backend
+```bash
+# Verify NEXT_PUBLIC_API_URL
+echo $NEXT_PUBLIC_API_URL
+
+# Check backend is running
+curl http://localhost:3000/api/v1/health
+
+# Check CORS
+curl -H "Origin: http://localhost:3001" \
+  http://localhost:3000/api/v1/employees -v
+```
+
+### Database errors
+```bash
+# Reset (dev only)
+npx prisma migrate reset --force
+
+# Check schema
+npx prisma studio
+```
+
+---
+
+## Documentation
+
+| Document | Coverage |
+|----------|----------|
+| `project-overview-pdr.md` | Goals, scope, stakeholders, modules, v1.0 criteria |
+| `codebase-summary.md` | Directory structure, stats, LOC breakdown |
+| `code-standards.md` | Coding conventions, patterns, pre-commit checklist |
+| `system-architecture.md` | Architecture diagram, auth flow, approval workflows |
+| `deployment-guide.md` | Local setup, Docker, production checklist |
+| `design-guidelines.md` | Colors, typography, components, accessibility |
+| `project-roadmap.md` | Status per module, milestones, known issues, blockers |
+
+**Start here**: `docs/codebase-summary.md` → `docs/code-standards.md` → pick a module
+
+---
+
+## Performance
+
+**API Response Times** (p95):
+- List endpoints: ~300ms
+- Single fetch: ~100ms
+- Create/Update: ~200ms
+- **Target**: <500ms ✓
+
+**Frontend Load**:
+- First Contentful Paint: ~1.5s
+- Time to Interactive: ~2.5s
+- **Target**: <3s ✓
+
+**Database**:
+- Queries optimized with Prisma `include`
+- Pagination for lists (skip & take)
+- No N+1 queries
+
+---
+
+## Security
+
+- **Passwords**: bcrypt (salt rounds: 12)
+- **Secrets**: All via env vars, never in code
+- **Auth**: JWT (24h expiry)
+- **RBAC**: 4 roles (admin, hr, manager, employee)
+- **Validation**: class-validator (whitelist: true)
+- **SQL Injection**: Prisma (parameterized queries)
+- **XSS**: React auto-escapes, no dangerouslySetInnerHTML
+- **Audit**: All mutations logged to AuditLog
+- **HTTPS**: Required in production (TLS 1.2+)
+
+---
+
+## Known Issues
+
+| Issue | Impact | Fix | ETA |
+|-------|--------|-----|-----|
+| Leave approval workflow incomplete | HR can't approve after manager | Complete workflow logic | 1 week |
+| Attendance shift processing incomplete | Can't calculate late/absent | Implement shift time matching | 3 days |
+| N+1 queries on employee list | Slow with 1000+ employees | Add Prisma include | Done |
+| No unit tests for services | Bugs slip through | Write Jest tests | 2 weeks |
+
+See `docs/project-roadmap.md` for full tracking.
+
+---
+
+## Contributing
+
+1. Read `docs/code-standards.md`
+2. Create feature branch (`feat/...`)
+3. Make changes, test locally
+4. Lint & format (`npm run lint --fix`)
+5. Create PR with description
+6. Wait for review + tests to pass
+7. Merge to `main`
+
+**Commit Format**:
+```
+feat(module): short description
+fix(module): short description
+docs: update README
+test(module): add unit tests
+refactor(module): improve code quality
+```
+
+---
+
+## Team
+
+- **Project Lead**: nghia0979139451@gmail.com
+- **Backend**: [Team]
+- **Frontend**: [Team]
+- **QA**: [Team]
+
+**Weekly Sync**: Tuesday 10:00 AM (Vietnam time)
+
+---
+
+## License
+
+UNLICENSED (proprietary)
+
+---
+
+## Status & Support
+
+- **Current Version**: v1.0-beta (72% complete)
+- **Latest Release**: 2026-04-22
+- **Support**: Email project lead
+- **Bugs**: Create issue in task tracker
+- **Feature Requests**: Discuss in weekly sync
+
+---
+
+## Next Steps
+
+1. **Immediate** (This week):
+   - Complete leave approval workflow
+   - Fix attendance shift processing
+
+2. **Short-term** (Next 2 weeks):
+   - Add GPS validation for attendance
+   - Start offboarding workflows
+
+3. **Medium-term** (Next month):
+   - Complete all Phase 2 modules
+   - Add unit tests (70% coverage)
+
+4. **Long-term** (June onwards):
+   - Polish & optimization
+   - Docker & CI/CD setup
+   - Production deployment (v1.0)
+
+See `docs/project-roadmap.md` for detailed tracking.
+
+---
+
+## Quick Links
+
+- **Swagger API Docs**: http://localhost:3000/api/docs
+- **Prisma Studio**: `npx prisma studio`
+- **GitHub Issues**: [Link]
+- **Slack Channel**: [Link]
+- **Documentation**: `docs/`
+
+---
+
+## FAQ
+
+**Q: How do I reset the database?**
+A: `npx prisma migrate reset --force` (dev only, deletes all data)
+
+**Q: Where are the secrets?**
+A: `.env.local` file (never in git). Use secrets manager in production.
+
+**Q: How do I add a new module?**
+A: Follow structure in `docs/code-standards.md` → create controller, service, module, DTOs
+
+**Q: How do I deploy to production?**
+A: See `docs/deployment-guide.md` for Docker, env vars, SSL setup
+
+**Q: Can I use fetch instead of axios?**
+A: No, use centralized axios instance in `lib/axios.ts` (handles JWT interceptor, timeouts, error handling)
+
+**Q: What's the file size limit?**
+A: 200 LOC per file. Split if larger. See code-standards.md for refactoring examples.
+
+---
+
+Last Updated: 2026-04-22

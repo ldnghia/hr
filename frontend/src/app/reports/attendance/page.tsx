@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { attendanceService } from '@/services/attendance.service';
+import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatDateTime, formatDateFile } from '@/utils/format';
 import type { AttendanceRecord } from '@/types';
 import {
   ClipboardList, Clock, AlertTriangle, LogOut,
   RotateCcw, Search, Hash, FileSpreadsheet,
-  ChevronLeft, ChevronRight, ChevronDown, LayoutGrid, List,
+  ChevronLeft, ChevronRight, ChevronDown, LayoutGrid, List, CalendarDays,
 } from 'lucide-react';
 
 // ─── Month Picker Modal ───────────────────────────────────────────────────────
@@ -25,9 +26,11 @@ interface MonthPickerModalProps {
   onConfirm: (year: number, month: number) => void;
   onClose: () => void;
   loading?: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
-function MonthPickerModal({ onConfirm, onClose, loading }: MonthPickerModalProps) {
+function MonthPickerModal({ onConfirm, onClose, loading, title, subtitle }: MonthPickerModalProps) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1); // 1-12
@@ -39,8 +42,8 @@ function MonthPickerModal({ onConfirm, onClose, loading }: MonthPickerModalProps
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-gray-900 text-base">Chọn tháng xuất báo cáo</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Bảng chấm công dạng lưới S/C</p>
+            <h3 className="font-bold text-gray-900 text-base">{title ?? 'Chọn tháng xuất báo cáo'}</h3>
+            <p className="text-xs text-gray-400 mt-0.5">{subtitle ?? 'Bảng chấm công dạng lưới S/C'}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400">
             ✕
@@ -152,6 +155,8 @@ function StatCard({ label, value, sub, gradient, icon }: StatCardProps) {
 
 export default function AttendanceReportPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const todayDate = new Date();
   const defaultFrom = toYmd(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1));
   const defaultTo = toYmd(todayDate);
@@ -190,9 +195,14 @@ export default function AttendanceReportPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  const [activePreset, setActivePreset] = useState<string>('month');
+  const [filterMonthOpen, setFilterMonthOpen] = useState(false);
+  const [filterPickYear, setFilterPickYear] = useState(todayDate.getFullYear());
   const [exportOpen, setExportOpen] = useState(false);
   const [gridModalOpen, setGridModalOpen] = useState(false);
   const [gridExporting, setGridExporting] = useState(false);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [summaryExporting, setSummaryExporting] = useState(false);
 
   const triggerDownload = (blob: Blob, filename: string) => {
     const url = window.URL.createObjectURL(blob);
@@ -223,19 +233,44 @@ export default function AttendanceReportPage() {
     finally { setGridExporting(false); }
   };
 
-  const applyDateRange = (choice: number) => {
-    const t = new Date();
-    const ranges = [
-      [new Date(t.getFullYear(), t.getMonth(), 1), t],
-      [new Date(t.getFullYear(), t.getMonth() - 1, 1), new Date(t.getFullYear(), t.getMonth(), 0)],
-      [new Date(t.getFullYear(), t.getMonth() - 2, 1), new Date(t.getFullYear(), t.getMonth(), 0)],
-    ] as [Date, Date][];
-    const [start, end] = ranges[choice];
+  const handleExportSummary = async (year: number, month: number) => {
+    setSummaryExporting(true);
+    try {
+      const dateFrom = `${year}-${String(month).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const dateTo = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      const res = await attendanceService.exportSummary({ dateFrom, dateTo });
+      triggerDownload(new Blob([res.data]), `Bao_Cao_Ngay_Cong_T${String(month).padStart(2, '0')}_${year}.xlsx`);
+      setSummaryModalOpen(false);
+    } catch { alert('Export summary failed'); }
+    finally { setSummaryExporting(false); }
+  };
+
+  const applyPreset = (preset: string) => {
+    const now = new Date();
+    let start: Date, end: Date;
+    if (preset === 'today') { start = end = now; }
+    else if (preset === 'month') { start = new Date(now.getFullYear(), now.getMonth(), 1); end = now; }
+    else if (preset === 'last1') { start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0); }
+    else if (preset === 'last2') { start = new Date(now.getFullYear(), now.getMonth() - 2, 1); end = new Date(now.getFullYear(), now.getMonth(), 0); }
+    else return;
     setFilters(f => ({ ...f, dateFrom: toYmd(start), dateTo: toYmd(end) }));
+    setActivePreset(preset);
+    setPage(1);
+  };
+
+  const applyFilterMonth = (year: number, month: number) => {
+    const dateFrom = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const dateTo = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    setFilters(f => ({ ...f, dateFrom, dateTo }));
+    setActivePreset(`pick-${year}-${month}`);
+    setFilterMonthOpen(false);
     setPage(1);
   };
 
   const resetFilters = () => {
+    setActivePreset('month');
     setFilters({ dateFrom: defaultFrom, dateTo: defaultTo, employeeName: '', employeeCode: '', isLate: undefined, isEarlyOut: undefined });
     setPage(1);
   };
@@ -327,111 +362,193 @@ export default function AttendanceReportPage() {
           onClose={() => setGridModalOpen(false)}
         />
       )}
+      {summaryModalOpen && (
+        <MonthPickerModal
+          title="Báo cáo số ngày công"
+          subtitle="Tổng hợp ngày công theo tháng"
+          loading={summaryExporting}
+          onConfirm={handleExportSummary}
+          onClose={() => setSummaryModalOpen(false)}
+        />
+      )}
       <div className="space-y-5">
 
         {/* ── Filter Card ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-          {/* Top row */}
-          <div className="flex flex-wrap items-end gap-3 p-5">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                <Clock size={11} /> {t('reports.fromDate')}
-              </label>
-              <Input type="date" value={filters.dateFrom}
-                onChange={e => { setFilters(f => ({ ...f, dateFrom: e.target.value })); setPage(1); }} />
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+
+          {/* Row 1 — Date range + Quick presets + Actions */}
+          <div className="flex flex-wrap items-end gap-3 px-5 py-4">
+            {/* Date inputs */}
+            <div className="flex items-end gap-2 shrink-0">
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block">{t('reports.fromDate')}</label>
+                <Input type="date" value={filters.dateFrom} className="w-36"
+                  onChange={e => { setFilters(f => ({ ...f, dateFrom: e.target.value })); setActivePreset('custom'); setPage(1); }} />
+              </div>
+              <span className="text-gray-300 pb-2.5">—</span>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide block">{t('reports.toDate')}</label>
+                <Input type="date" value={filters.dateTo} className="w-36"
+                  onChange={e => { setFilters(f => ({ ...f, dateTo: e.target.value })); setActivePreset('custom'); setPage(1); }} />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                <Clock size={11} /> {t('reports.toDate')}
-              </label>
-              <Input type="date" value={filters.dateTo}
-                onChange={e => { setFilters(f => ({ ...f, dateTo: e.target.value })); setPage(1); }} />
-            </div>
-            <div className="flex gap-1.5 pb-0.5">
-              {[t('reports.currentMonth'), t('reports.lastMonth'), t('reports.lastTwoMonths')].map((label, i) => (
-                <button key={i} onClick={() => applyDateRange(i)}
-                  className="px-3 py-2 text-xs font-medium rounded-xl border border-gray-200 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-150 whitespace-nowrap">
+
+            {/* Preset pills */}
+            <div className="flex flex-wrap items-center gap-1.5 pb-0.5">
+              {([
+                { key: 'today',  label: 'Hôm nay' },
+                { key: 'month',  label: t('reports.currentMonth') },
+                { key: 'last1',  label: t('reports.lastMonth') },
+                { key: 'last2',  label: t('reports.lastTwoMonths') },
+              ] as const).map(({ key, label }) => (
+                <button key={key} onClick={() => applyPreset(key)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150 whitespace-nowrap
+                    ${activePreset === key
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                      : 'border-gray-200 text-gray-600 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>
                   {label}
                 </button>
               ))}
-            </div>
-            <div className="flex gap-2 ml-auto pb-0.5">
-              <Button variant="secondary" size="sm" onClick={resetFilters}>
-                <RotateCcw size={13} /> {t('reports.reset')}
-              </Button>
-              {/* Export dropdown */}
+
+              {/* Inline month picker */}
               <div className="relative">
-                <button
-                  onClick={() => setExportOpen(o => !o)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
-                >
-                  <FileSpreadsheet size={13} /> {t('reports.exportExcel')} <ChevronDown size={12} />
+                <button onClick={() => setFilterMonthOpen(o => !o)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150 flex items-center gap-1.5 whitespace-nowrap
+                    ${activePreset.startsWith('pick-')
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                      : 'border-gray-200 text-gray-600 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50'}`}>
+                  <Clock size={11} />
+                  {activePreset.startsWith('pick-')
+                    ? (() => { const [,y,m] = activePreset.split('-'); return `T${m}/${y}`; })()
+                    : 'Chọn tháng'}
+                  <ChevronDown size={10} />
                 </button>
-                {exportOpen && (
+
+                {filterMonthOpen && (
                   <>
-                    <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-20 w-52 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-                      <button onClick={handleExport}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                        <List size={15} className="text-emerald-600 shrink-0" />
-                        <div className="text-left">
-                          <p className="font-medium">Báo cáo danh sách</p>
-                          <p className="text-xs text-gray-400">Chi tiết từng bản ghi</p>
-                        </div>
-                      </button>
-                      <div className="border-t border-gray-50" />
-                      <button onClick={() => { setExportOpen(false); setGridModalOpen(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                        <LayoutGrid size={15} className="text-indigo-600 shrink-0" />
-                        <div className="text-left">
-                          <p className="font-medium">Bảng chấm công</p>
-                          <p className="text-xs text-gray-400">Lưới S/C theo ngày</p>
-                        </div>
-                      </button>
+                    <div className="fixed inset-0 z-20" onClick={() => setFilterMonthOpen(false)} />
+                    <div className="absolute left-0 top-full mt-2 z-30 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-64">
+                      {/* Year nav */}
+                      <div className="flex items-center justify-between mb-3">
+                        <button onClick={() => setFilterPickYear(y => y - 1)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+                          <ChevronLeft size={14} />
+                        </button>
+                        <span className="font-bold text-gray-800 text-sm">{filterPickYear}</span>
+                        <button onClick={() => setFilterPickYear(y => y + 1)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                      {/* Month grid */}
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {MONTHS.map((label, i) => {
+                          const m = i + 1;
+                          const key = `pick-${filterPickYear}-${String(m).padStart(2,'0')}`;
+                          const isSelected = activePreset === key;
+                          return (
+                            <button key={m} onClick={() => applyFilterMonth(filterPickYear, m)}
+                              className={`py-2 rounded-xl text-xs font-medium transition-all
+                                ${isSelected ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-indigo-50 hover:text-indigo-600 text-gray-700'}`}>
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </>
                 )}
               </div>
             </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 ml-auto pb-0.5">
+              <Button variant="secondary" size="sm" onClick={resetFilters}>
+                <RotateCcw size={13} /> {t('reports.reset')}
+              </Button>
+              {isAdmin && (
+                <div className="relative">
+                  <button onClick={() => setExportOpen(o => !o)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors">
+                    <FileSpreadsheet size={13} /> {t('reports.exportExcel')} <ChevronDown size={12} />
+                  </button>
+                  {exportOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
+                      <div className="absolute right-0 top-full mt-1 z-20 w-52 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                        <button onClick={handleExport}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                          <List size={15} className="text-emerald-600 shrink-0" />
+                          <div className="text-left">
+                            <p className="font-medium">Báo cáo danh sách</p>
+                            <p className="text-xs text-gray-400">Chi tiết từng bản ghi</p>
+                          </div>
+                        </button>
+                        <div className="border-t border-gray-50" />
+                        <button onClick={() => { setExportOpen(false); setGridModalOpen(true); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                          <LayoutGrid size={15} className="text-indigo-600 shrink-0" />
+                          <div className="text-left">
+                            <p className="font-medium">Bảng chấm công</p>
+                            <p className="text-xs text-gray-400">Lưới S/C theo ngày</p>
+                          </div>
+                        </button>
+                        <div className="border-t border-gray-50" />
+                        <button onClick={() => { setExportOpen(false); setSummaryModalOpen(true); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                          <CalendarDays size={15} className="text-violet-600 shrink-0" />
+                          <div className="text-left">
+                            <p className="font-medium">Báo cáo ngày công</p>
+                            <p className="text-xs text-gray-400">Tổng hợp ngày công tháng</p>
+                          </div>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Bottom row: Search + Status filters */}
-          <div className="flex flex-wrap items-center gap-3 px-5 pb-5 pt-0 border-t border-gray-50">
-            <div className="relative min-w-[180px]">
+          {/* Row 2 — Search + Status, fills full width */}
+          <div className="flex items-center gap-3 px-5 py-3.5 border-t border-gray-50">
+            <div className="relative flex-1 min-w-0">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <Input placeholder={t('reports.searchName')} className="pl-8 text-sm"
+              <Input placeholder={t('reports.searchName')} className="pl-8 text-sm w-full"
                 value={search.employeeName}
                 onChange={e => setSearch(s => ({ ...s, employeeName: e.target.value }))}
                 onBlur={() => commitSearch('employeeName')}
                 onKeyDown={e => e.key === 'Enter' && commitSearch('employeeName')} />
             </div>
-            <div className="relative min-w-[160px]">
+            <div className="relative w-40 shrink-0">
               <Hash size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <Input placeholder={t('reports.searchCode')} className="pl-8 text-sm"
+              <Input placeholder={t('reports.searchCode')} className="pl-8 text-sm w-full"
                 value={search.employeeCode}
                 onChange={e => setSearch(s => ({ ...s, employeeCode: e.target.value }))}
                 onBlur={() => commitSearch('employeeCode')}
                 onKeyDown={e => e.key === 'Enter' && commitSearch('employeeCode')} />
             </div>
-            <div className="flex items-center gap-5 ml-2">
-              <label className="flex items-center gap-2 cursor-pointer select-none group">
+            <div className="w-px self-stretch bg-gray-100" />
+            <div className="flex items-center gap-5 shrink-0">
+              <label className="flex items-center gap-2 cursor-pointer select-none group whitespace-nowrap">
                 <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-red-500 focus:ring-red-400"
                   checked={!!filters.isLate}
                   onChange={e => { setFilters(f => ({ ...f, isLate: e.target.checked || undefined })); setPage(1); }} />
-                <span className="text-sm text-gray-600 group-hover:text-gray-900 flex items-center gap-1">
+                <span className="text-sm text-gray-600 group-hover:text-gray-900 flex items-center gap-1.5">
                   <AlertTriangle size={12} className="text-red-400" /> {t('reports.lateFilter')}
                 </span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none group">
+              <label className="flex items-center gap-2 cursor-pointer select-none group whitespace-nowrap">
                 <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
                   checked={!!filters.isEarlyOut}
                   onChange={e => { setFilters(f => ({ ...f, isEarlyOut: e.target.checked || undefined })); setPage(1); }} />
-                <span className="text-sm text-gray-600 group-hover:text-gray-900 flex items-center gap-1">
+                <span className="text-sm text-gray-600 group-hover:text-gray-900 flex items-center gap-1.5">
                   <LogOut size={12} className="text-amber-400" /> {t('reports.earlyFilter')}
                 </span>
               </label>
             </div>
           </div>
+
         </div>
 
         {/* ── KPI Cards ── */}
