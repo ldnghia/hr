@@ -1,3 +1,6 @@
+-- AlterTable
+ALTER TABLE "attendance" ADD COLUMN IF NOT EXISTS "is_corrected" BOOLEAN NOT NULL DEFAULT false;
+
 -- CreateTable
 CREATE TABLE "attendance_correction_request" (
     "id" SERIAL NOT NULL,
