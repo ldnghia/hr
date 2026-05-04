@@ -18,6 +18,12 @@ import { employeeService } from '@/services/employee.service';
 import { organizationService } from '@/services/organization.service';
 import type { NearestBranch } from '@/services/attendance.service';
 import { formatDate, formatDateTime, formatHours } from '@/utils/format';
+import { Tabs } from '@/components/ui/Tabs';
+import { CorrectedBadge } from '@/app/attendance/components/corrected-badge';
+import { CorrectionRequestFormModal } from '@/app/attendance/components/correction-request-form-modal';
+import { CorrectionRequestList } from '@/app/attendance/components/correction-request-list';
+import { CorrectionAdminPanel } from '@/app/attendance/components/correction-admin-panel';
+import { AdminEditAttendanceModal } from '@/app/attendance/components/admin-edit-attendance-modal';
 import type {
   TodayStatus,
   AttendanceRecord,
@@ -423,8 +429,20 @@ export default function AttendancePage() {
   const [myLoading, setMyLoading] = useState(true);
   const { page: myPage, limit: myLimit, next: myNext, prev: myPrev } = usePagination(10);
 
-  // Admin report
+  // Tabs
+  const isAdminOrHr = user && ['admin', 'hr'].includes(user.role);
   const isManager = user && ['admin', 'hr', 'manager'].includes(user.role);
+
+  const tabs = [
+    { key: 'attendance', label: 'My Attendance' },
+    { key: 'my-corrections', label: 'My Correction Requests' },
+    ...(isAdminOrHr ? [{ key: 'manage-corrections', label: 'Manage Corrections' }] : []),
+  ];
+  const [activeTab, setActiveTab] = useState('attendance');
+
+  // Correction modals
+  const [correctionTarget, setCorrectionTarget] = useState<AttendanceRecord | null>(null);
+  const [adminEditTarget, setAdminEditTarget] = useState<AttendanceRecord | null>(null);
   const [report, setReport] = useState<(PaginatedResponse<AttendanceRecord> & { summary?: { totalWorkingHours: number; totalRecords: number } }) | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
@@ -638,6 +656,29 @@ export default function AttendancePage() {
   return (
     <AppShell title={t('attendance.title')}>
       <div className="space-y-6">
+
+        {/* ── Page tabs ── */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <Tabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
+        </div>
+
+        {/* ── My Correction Requests tab ── */}
+        {activeTab === 'my-corrections' && (
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <h3 className="mb-4 text-base font-semibold text-gray-800">My Correction Requests</h3>
+            <CorrectionRequestList />
+          </div>
+        )}
+
+        {/* ── Manage Corrections tab (admin/hr) ── */}
+        {activeTab === 'manage-corrections' && isAdminOrHr && (
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+            <h3 className="mb-4 text-base font-semibold text-gray-800">Manage Correction Requests</h3>
+            <CorrectionAdminPanel />
+          </div>
+        )}
+
+        {activeTab === 'attendance' && (<>
 
         {/* ── HTTPS warning ── */}
         {!isHttps && (
@@ -925,6 +966,7 @@ export default function AttendancePage() {
                       <th className="px-6 py-3 text-left">{t('reports.colHours')}</th>
                       <th className="px-6 py-3 text-left">{t('common.status')}</th>
                       <th className="px-6 py-3 text-left">{t('common.notes')}</th>
+                      <th className="px-6 py-3 text-left">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -971,11 +1013,34 @@ export default function AttendancePage() {
                             {!rec.checkinNote && !rec.checkoutNote && <span className="text-gray-300 italic uppercase tracking-widest text-[9px]">{t('common.noData')}</span>}
                           </div>
                         </td>
+                        <td className="px-6 py-3">
+                          <div className="flex flex-col gap-1">
+                            {rec.isCorrected && (
+                              <CorrectedBadge correctionRequestId={rec.correctionRequestId} />
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setCorrectionTarget(rec)}
+                            >
+                              Request Correction
+                            </Button>
+                            {isAdminOrHr && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => setAdminEditTarget(rec)}
+                              >
+                                Admin Edit
+                              </Button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {myRecords?.data.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-400">
+                        <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-400">
                           {t('attendance.noRecordsYet')}
                         </td>
                       </tr>
@@ -1106,6 +1171,8 @@ export default function AttendancePage() {
           </div>
         )}
 
+        </>)}
+
       </div>
 
       {/* ── Checkout confirm modal ── */}
@@ -1138,6 +1205,26 @@ export default function AttendancePage() {
           </div>
         </div>
       </Modal>
+
+      {/* ── Correction request modal ── */}
+      {correctionTarget && (
+        <CorrectionRequestFormModal
+          attendance={correctionTarget}
+          isOpen={!!correctionTarget}
+          onClose={() => setCorrectionTarget(null)}
+          onSuccess={() => { setCorrectionTarget(null); loadMyRecords(); }}
+        />
+      )}
+
+      {/* ── Admin edit modal ── */}
+      {adminEditTarget && (
+        <AdminEditAttendanceModal
+          attendance={adminEditTarget}
+          isOpen={!!adminEditTarget}
+          onClose={() => setAdminEditTarget(null)}
+          onSuccess={() => { setAdminEditTarget(null); loadMyRecords(); loadReport(); }}
+        />
+      )}
 
     </AppShell>
   );

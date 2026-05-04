@@ -12,6 +12,10 @@ import * as ExcelJS from 'exceljs';
 import { Response } from 'express';
 import { formatDate, formatDateTime } from '../common/utils/format';
 
+/** Format a Date using local calendar date (avoids UTC shift when server is UTC+7) */
+const localDateStr = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 const ATTENDANCE_EMPLOYEE_SELECT = {
   id: true,
   code: true,
@@ -187,9 +191,10 @@ export class AttendanceService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.attendance.findMany({
         where,
-        include: { 
+        include: {
           employee: { select: ATTENDANCE_EMPLOYEE_SELECT },
-          shift: true
+          shift: true,
+          corrections: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true } },
         },
         skip,
         take,
@@ -295,7 +300,7 @@ export class AttendanceService {
 
     // Lookup: `${empId}_${dateISO}` → record
     const lookup = new Map<string, any>();
-    records.forEach((r: any) => { lookup.set(`${r.employeeId}_${new Date(r.date).toISOString().split('T')[0]}`, r); });
+    records.forEach((r: any) => { lookup.set(`${r.employeeId}_${localDateStr(new Date(r.date))}`, r); });
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Bảng Chấm Công');
@@ -360,7 +365,7 @@ export class AttendanceService {
       });
 
       days.forEach((day, di) => {
-        const ds = day.toISOString().split('T')[0];
+        const ds = localDateStr(day);
         const rec = lookup.get(`${emp.id}_${ds}`);
         const colS = FIX + 1 + di * 2;
         const isSun = day.getDay() === 0;
@@ -396,10 +401,10 @@ export class AttendanceService {
 
     // 1. Calendar days in range → working days + holiday days count
     const calDays = await this.prisma.calendarDay.findMany({ where: { date: { gte: start, lte: end } } });
-    const calMap = new Map(calDays.map(d => [d.date.toISOString().split('T')[0], d]));
+    const calMap = new Map(calDays.map(d => [localDateStr(new Date(d.date)), d]));
     let officialWorkingDays = 0; let officialHolidayDays = 0;
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const ds = d.toISOString().split('T')[0];
+      const ds = localDateStr(d);
       const cal = calMap.get(ds);
       const dow = d.getDay();
       if (!cal) { if (dow !== 0 && dow !== 6) officialWorkingDays++; continue; }
@@ -431,13 +436,13 @@ export class AttendanceService {
 
     // 5. Attendance lookup: empId_date → record
     const attMap = new Map<string, any>();
-    records.forEach((r: any) => { attMap.set(`${r.employeeId}_${new Date(r.date).toISOString().split('T')[0]}`, r); });
+    records.forEach((r: any) => { attMap.set(`${r.employeeId}_${localDateStr(new Date(r.date))}`, r); });
 
     // 6. Per-employee summary
     const summaries = employees.map(emp => {
       let ngayCong = 0;
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const ds = d.toISOString().split('T')[0]; const cal = calMap.get(ds); const dow = d.getDay();
+        const ds = localDateStr(d); const cal = calMap.get(ds); const dow = d.getDay();
         const isWorking = cal ? (cal.type === 'WORKING' || cal.type === 'COMPENSATION') : (dow !== 0 && dow !== 6);
         if (!isWorking) continue;
         const rec = attMap.get(`${emp.id}_${ds}`);
@@ -544,7 +549,10 @@ export class AttendanceService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.attendance.findMany({
         where,
-        include: { employee: { select: ATTENDANCE_EMPLOYEE_SELECT } },
+        include: {
+          employee: { select: ATTENDANCE_EMPLOYEE_SELECT },
+          corrections: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true } },
+        },
         skip,
         take,
         orderBy: { date: 'desc' },

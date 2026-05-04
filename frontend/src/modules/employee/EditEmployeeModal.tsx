@@ -10,7 +10,7 @@ import { Alert } from '@/components/ui/Alert';
 import { employeeService } from '@/services/employee.service';
 import { leaveService } from '@/services/leave.service';
 import { organizationService } from '@/services/organization.service';
-import type { Employee, Branch, Department, Position, LeaveBalance } from '@/types';
+import type { Employee, Branch, Department, DepartmentShift, Position, LeaveBalance } from '@/types';
 
 interface EditEmployeeModalProps {
   open: boolean;
@@ -34,13 +34,14 @@ interface FormState {
   managerId: string;
   telegramId: string;
   initialLeaveBalance: string;
+  shiftId: string;
 }
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
 export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEditBalance = false, onSuccess }: EditEmployeeModalProps) {
   const { t } = useTranslation();
-  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '' });
+  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '', shiftId: '' });
   const [errors, setErrors]     = useState<FormErrors>({});
   const [apiError, setApiError] = useState('');
   const [saving, setSaving]     = useState(false);
@@ -48,7 +49,8 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
   const [branches, setBranches]       = useState<Branch[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions]     = useState<Position[]>([]);
-  const [managers, setManagers]         = useState<Employee[]>([]);
+  const [managers, setManagers]       = useState<Employee[]>([]);
+  const [shifts, setShifts]           = useState<DepartmentShift[]>([]);
   const [loadingDepts, setLoadingDepts] = useState(false);
   const [loadingPos, setLoadingPos]     = useState(false);
   const [loadingMgr, setLoadingMgr]     = useState(false);
@@ -72,6 +74,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
       managerId:           String(employee.managerId    ?? ''),
       telegramId:          employee.telegramId         ?? '',
       initialLeaveBalance: String(leaveBalance?.total ?? ''),
+      shiftId:             String(employee.shiftId     ?? ''),
     });
     setErrors({});
     setApiError('');
@@ -109,6 +112,13 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
       .then(setPositions)
       .catch(() => setPositions([]))
       .finally(() => setLoadingPos(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, form.departmentId]);
+
+  // Load shifts when departmentId changes
+  useEffect(() => {
+    if (!open || !form.departmentId) { setShifts([]); return; }
+    organizationService.departmentShifts(Number(form.departmentId)).then(setShifts).catch(() => setShifts([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, form.departmentId]);
 
@@ -177,6 +187,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
         positionId:   form.positionId   ? Number(form.positionId)   : undefined,
         managerId:    form.managerId    ? Number(form.managerId)     : undefined,
         telegramId:   form.telegramId || undefined,
+        shiftId:      form.shiftId     ? Number(form.shiftId)       : null,
       });
 
       let newBalance: LeaveBalance | undefined;
@@ -324,6 +335,17 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
               })),
             ]}
           />
+          {shifts.length > 0 && (
+            <Select
+              label={t('employee.workShift')}
+              value={form.shiftId}
+              onChange={(e) => set('shiftId', e.target.value)}
+              options={[
+                { value: '', label: t('employee.selectShift') },
+                ...shifts.map((s) => ({ value: String(s.id), label: s.name })),
+              ]}
+            />
+          )}
         </fieldset>
 
         <hr className="border-gray-100" />

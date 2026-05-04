@@ -98,6 +98,8 @@ model Employee {
   checklists           OffboardingChecklist[]
   resignationApprovals ResignationApproval[]  @relation("ApproverToResignationApprovals")
   resignationRequests  ResignationRequest[]
+  correctionRequests   AttendanceCorrectionRequest[] @relation("CorrectionRequester")
+  correctionReviews    AttendanceCorrectionRequest[] @relation("CorrectionReviewer")
 
   @@map("employee")
 }
@@ -245,10 +247,11 @@ model Shift {
   departmentId      Int?                      @map("department_id")
   code              String                    @unique
   isActive          Boolean                   @default(true) @map("is_active")
-  attendances       Attendance[]
-  currentEmployees  Employee[]                @relation("EmployeeToShift")
-  assignments       EmployeeShiftAssignment[]
-  department        Department?               @relation(fields: [departmentId], references: [id])
+  attendances         Attendance[]
+  currentEmployees    Employee[]                @relation("EmployeeToShift")
+  assignments         EmployeeShiftAssignment[]
+  department          Department?               @relation(fields: [departmentId], references: [id])
+  correctionRequests  AttendanceCorrectionRequest[] @relation("CorrectionRequestedShift")
 
   @@map("shift")
 }
@@ -318,11 +321,50 @@ model Attendance {
   hasLocation     Boolean   @default(false) @map("has_location")
   checkinNote     String?   @map("checkin_note")
   checkoutNote    String?   @map("checkout_note")
-  employee        Employee? @relation(fields: [employeeId], references: [id])
-  shift           Shift?    @relation(fields: [shiftId], references: [id])
+  isCorrected         Boolean   @default(false) @map("is_corrected")
+  correctionRequestId Int?      @unique @map("correction_request_id")
+  employee            Employee? @relation(fields: [employeeId], references: [id])
+  shift               Shift?    @relation(fields: [shiftId], references: [id])
+  corrections         AttendanceCorrectionRequest[] @relation("AttendanceToCorrections")
 
   @@unique([employeeId, date])
   @@map("attendance")
+}
+
+model AttendanceCorrectionRequest {
+  id                    Int       @id @default(autoincrement())
+  employeeId            Int       @map("employee_id")
+  attendanceId          Int       @map("attendance_id")
+
+  requestedCheckinTime  DateTime? @map("requested_checkin_time")
+  requestedCheckoutTime DateTime? @map("requested_checkout_time")
+  requestedCheckinNote  String?   @map("requested_checkin_note")
+  requestedCheckoutNote String?   @map("requested_checkout_note")
+  requestedShiftId      Int?      @map("requested_shift_id")
+
+  originalCheckinTime   DateTime? @map("original_checkin_time")
+  originalCheckoutTime  DateTime? @map("original_checkout_time")
+  originalCheckinNote   String?   @map("original_checkin_note")
+  originalCheckoutNote  String?   @map("original_checkout_note")
+  originalShiftId       Int?      @map("original_shift_id")
+
+  reason                String
+  status                String    @default("pending")
+  reviewedBy            Int?      @map("reviewed_by")
+  reviewedAt            DateTime? @map("reviewed_at")
+  reviewNote            String?   @map("review_note")
+
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  employee              Employee  @relation("CorrectionRequester", fields: [employeeId], references: [id])
+  reviewer              Employee? @relation("CorrectionReviewer", fields: [reviewedBy], references: [id])
+  attendance            Attendance @relation("AttendanceToCorrections", fields: [attendanceId], references: [id])
+  requestedShift        Shift?    @relation("CorrectionRequestedShift", fields: [requestedShiftId], references: [id])
+
+  @@index([employeeId, createdAt])
+  @@index([attendanceId, status])
+  @@map("attendance_correction_request")
 }
 
 model AttendanceRaw {

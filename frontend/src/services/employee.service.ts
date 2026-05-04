@@ -25,6 +25,7 @@ export interface CreateEmployeePayload {
   role?: string;
   telegramId?: string;
   initialLeaveBalance?: number;
+  shiftId?: number;
 }
 
 export interface UpdateEmployeePayload {
@@ -39,6 +40,7 @@ export interface UpdateEmployeePayload {
   positionId?: number;
   managerId?: number;
   telegramId?: string;
+  shiftId?: number | null;
 }
 
 export interface AdminUpdateProfilePayload {

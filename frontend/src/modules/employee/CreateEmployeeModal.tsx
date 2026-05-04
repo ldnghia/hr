@@ -9,7 +9,7 @@ import { Alert } from '@/components/ui/Alert';
 import { useTranslation } from 'react-i18next';
 import { employeeService, type CreateEmployeePayload } from '@/services/employee.service';
 import { organizationService } from '@/services/organization.service';
-import type { Branch, Department, Position, Employee } from '@/types';
+import type { Branch, Department, DepartmentShift, Position, Employee } from '@/types';
 
 interface CreateEmployeeModalProps {
   open: boolean;
@@ -31,6 +31,7 @@ interface FormState {
   status: string;
   telegramId: string;
   initialLeaveBalance: string;
+  shiftId: string;
 }
 
 const INITIAL: FormState = {
@@ -47,6 +48,7 @@ const INITIAL: FormState = {
   status: 'probation',
   telegramId: '',
   initialLeaveBalance: '12',
+  shiftId: '',
 };
 
 function toOptions<T extends { id: number; name?: string | null }>(
@@ -71,6 +73,7 @@ export function CreateEmployeeModal({
   const [departments, setDepartments] = useState<Department[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [managers, setManagers] = useState<Employee[]>([]);
+  const [shifts, setShifts] = useState<DepartmentShift[]>([]);
   const [loadingRefs, setLoadingRefs] = useState(false);
 
   // Load reference data when modal opens
@@ -116,7 +119,13 @@ export function CreateEmployeeModal({
     organizationService
       .positions({ departmentId: Number(form.departmentId) })
       .then(setPositions);
-    setForm((f) => ({ ...f, positionId: '' }));
+    setForm((f) => ({ ...f, positionId: '', shiftId: '' }));
+  }, [form.departmentId]);
+
+  // Re-fetch shifts when department changes (for SHIFT-type departments)
+  useEffect(() => {
+    if (!form.departmentId) { setShifts([]); return; }
+    organizationService.departmentShifts(Number(form.departmentId)).then(setShifts).catch(() => setShifts([]));
   }, [form.departmentId]);
 
   function set(key: keyof FormState, value: string) {
@@ -135,6 +144,8 @@ export function CreateEmployeeModal({
     if (!form.branchId) errs.branchId = t('validation.branchRequired');
     if (!form.departmentId) errs.departmentId = t('validation.departmentRequired');
     if (!form.positionId) errs.positionId = t('validation.positionRequired');
+    const selectedDept = departments.find((d) => String(d.id) === form.departmentId);
+    if (selectedDept?.workingType === 'SHIFT' && !form.shiftId) errs.shiftId = t('validation.shiftRequired');
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -160,6 +171,7 @@ export function CreateEmployeeModal({
         status: form.status,
         telegramId: form.telegramId || undefined,
         initialLeaveBalance: form.initialLeaveBalance ? Number(form.initialLeaveBalance) : undefined,
+        shiftId: form.shiftId ? Number(form.shiftId) : undefined,
       };
       const created = await employeeService.create(payload);
       onSuccess(created);
@@ -308,6 +320,16 @@ export function CreateEmployeeModal({
               }))}
               onChange={(e) => set('managerId', e.target.value)}
             />
+            {shifts.length > 0 && (
+              <Select
+                label={`${t('employee.workShift')} *`}
+                placeholder={t('employee.selectShift')}
+                value={form.shiftId}
+                options={shifts.map((s) => ({ value: s.id, label: s.name }))}
+                onChange={(e) => set('shiftId', e.target.value)}
+                error={errors.shiftId}
+              />
+            )}
           </fieldset>
 
           <hr className="border-gray-100" />

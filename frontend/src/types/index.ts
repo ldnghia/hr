@@ -236,6 +236,10 @@ export interface AttendanceRecord {
   // Leave integration
   isOnLeave?: boolean;
   leaveRequestId?: number | null;
+  // Correction tracking
+  isCorrected?: boolean;
+  correctionRequestId?: number | null;
+  corrections?: Array<{ id: number; status: string }>;
   employee?: Pick<Employee, 'id' | 'fullName' | 'code' | 'department' | 'position'>;
 }
 

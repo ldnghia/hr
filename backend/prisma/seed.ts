@@ -184,6 +184,17 @@ async function main() {
 
   console.log('Leave balance created for E004');
 
+  // ── System Config ──────────────────────────────────────────
+  await prisma.systemConfig.upsert({
+    where: { key: 'attendance_correction_monthly_limit' },
+    update: {},
+    create: {
+      key: 'attendance_correction_monthly_limit',
+      value: '3',
+      description: 'Max attendance correction requests per employee per month',
+    },
+  });
+
   console.log('\nSeed completed successfully!');
   console.log('\nDefault accounts (password: password123):');
   console.log('  Admin    -> admin@company.com');

@@ -18,6 +18,7 @@ import { WorkingShiftModule } from './working-shift/working-shift.module';
 import { MeModule } from './me/me.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { NotificationModule } from './notification/notification.module';
+import { AttendanceCorrectionModule } from './attendance-correction/attendance-correction.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { NotificationModule } from './notification/notification.module';
     WorkingShiftModule,
     SystemConfigModule,
     NotificationModule,
+    AttendanceCorrectionModule,
   ],
 })
 export class AppModule {}
