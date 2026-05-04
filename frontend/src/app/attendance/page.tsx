@@ -53,6 +53,7 @@ function fmtDistance(m: number): string {
 
 function WfmBadges({ record }: { record: AttendanceRecord }) {
   const { t } = useTranslation();
+  const latestCorrection = record.corrections?.[0];
   return (
     <div className="flex flex-wrap gap-1">
       {record.isLate && <Badge label={t('attendance.late')} variant="danger" />}
@@ -62,6 +63,15 @@ function WfmBadges({ record }: { record: AttendanceRecord }) {
       )}
       {!record.isLate && !record.isEarlyOut && !record.isOvertime && record.checkinTime && (
         <Badge label={t('attendance.onTime')} variant="success" />
+      )}
+      {record.isCorrected && (
+        <Badge label={t('attendance.corrected')} variant="neutral" />
+      )}
+      {latestCorrection?.status === 'pending' && (
+        <Badge label={t('attendance.correctionPending')} variant="warning" />
+      )}
+      {latestCorrection?.status === 'rejected' && (
+        <Badge label={t('attendance.correctionRejected')} variant="danger" />
       )}
     </div>
   );
@@ -434,9 +444,9 @@ export default function AttendancePage() {
   const isManager = user && ['admin', 'hr', 'manager'].includes(user.role);
 
   const tabs = [
-    { key: 'attendance', label: 'My Attendance' },
-    { key: 'my-corrections', label: 'My Correction Requests' },
-    ...(isAdminOrHr ? [{ key: 'manage-corrections', label: 'Manage Corrections' }] : []),
+    { key: 'attendance', label: t('attendance.myAttendanceTab') },
+    { key: 'my-corrections', label: t('attendance.myCorrectionRequests') },
+    ...(isAdminOrHr ? [{ key: 'manage-corrections', label: t('attendance.manageCorrectionRequests') }] : []),
   ];
   const [activeTab, setActiveTab] = useState('attendance');
 
@@ -573,8 +583,8 @@ export default function AttendancePage() {
 
       setLocationNote('');
       const successMsg = result.isLate
-        ? `Checked in at ${formatDateTime(result.attendance.checkinTime)} — marked LATE`
-        : `Checked in at ${formatDateTime(result.attendance.checkinTime)} — on time`;
+        ? `${t('attendance.checkIn')} ${formatDateTime(result.attendance.checkinTime)} — ${t('attendance.late')}`
+        : `${t('attendance.checkIn')} ${formatDateTime(result.attendance.checkinTime)} — ${t('attendance.onTime')}`;
       setActionMsg({ type: result.isLate ? 'error' : 'success', text: successMsg });
 
       // Clear any stale "force reason" state — check-in succeeded so location is authorized.
@@ -621,9 +631,9 @@ export default function AttendancePage() {
 
       setLocationNote('');
 
-      let successMsg = `Checked out · ${Number(result.workingHours).toFixed(1)}h worked`;
+      let successMsg = `${t('attendance.checkOut')} · ${Number(result.workingHours).toFixed(1)}h`;
       if (result.isOvertime) successMsg += ` · OT ${Number(result.overtimeHours).toFixed(1)}h`;
-      if (result.isEarlyOut) successMsg += ' · Early out';
+      if (result.isEarlyOut) successMsg += ` · ${t('attendance.earlyOut')}`;
       setActionMsg({ type: 'success', text: successMsg });
       setForceReason(false);
       setNoteError('');
@@ -665,7 +675,7 @@ export default function AttendancePage() {
         {/* ── My Correction Requests tab ── */}
         {activeTab === 'my-corrections' && (
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
-            <h3 className="mb-4 text-base font-semibold text-gray-800">My Correction Requests</h3>
+            <h3 className="mb-4 text-base font-semibold text-gray-800">{t('attendance.myCorrectionRequests')}</h3>
             <CorrectionRequestList />
           </div>
         )}
@@ -673,7 +683,7 @@ export default function AttendancePage() {
         {/* ── Manage Corrections tab (admin/hr) ── */}
         {activeTab === 'manage-corrections' && isAdminOrHr && (
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
-            <h3 className="mb-4 text-base font-semibold text-gray-800">Manage Correction Requests</h3>
+            <h3 className="mb-4 text-base font-semibold text-gray-800">{t('attendance.manageCorrectionRequests')}</h3>
             <CorrectionAdminPanel />
           </div>
         )}
@@ -966,7 +976,7 @@ export default function AttendancePage() {
                       <th className="px-6 py-3 text-left">{t('reports.colHours')}</th>
                       <th className="px-6 py-3 text-left">{t('common.status')}</th>
                       <th className="px-6 py-3 text-left">{t('common.notes')}</th>
-                      <th className="px-6 py-3 text-left">Actions</th>
+                      <th className="px-6 py-3 text-left">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -1023,7 +1033,7 @@ export default function AttendancePage() {
                               variant="ghost"
                               onClick={() => setCorrectionTarget(rec)}
                             >
-                              Request Correction
+                              {t('attendance.requestCorrectionBtn')}
                             </Button>
                             {isAdminOrHr && (
                               <Button
@@ -1031,7 +1041,7 @@ export default function AttendancePage() {
                                 variant="secondary"
                                 onClick={() => setAdminEditTarget(rec)}
                               >
-                                Admin Edit
+                                {t('attendance.adminEdit')}
                               </Button>
                             )}
                           </div>
