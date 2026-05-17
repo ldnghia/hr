@@ -164,11 +164,14 @@ export class EmployeeService {
 
     // Record initial shift assignment in history
     if (dto.shiftId) {
+      const now = new Date();
       await this.prisma.employeeShiftAssignment.create({
         data: {
           employeeId:    emp.id,
           shiftId:       dto.shiftId,
-          effectiveDate: new Date(),
+          effectiveDate: now,
+          year:          now.getFullYear(),
+          month:         now.getMonth() + 1,
         },
       });
     }
@@ -307,7 +310,13 @@ export class EmployeeService {
     if (dto.shiftId !== undefined && dto.shiftId !== employee.shiftId) {
       if (dto.shiftId !== null) {
         await this.prisma.employeeShiftAssignment.create({
-          data: { employeeId: id, shiftId: dto.shiftId, effectiveDate: today },
+          data: {
+            employeeId:    id,
+            shiftId:       dto.shiftId,
+            effectiveDate: today,
+            year:          today.getFullYear(),
+            month:         today.getMonth() + 1,
+          },
         });
       }
     }

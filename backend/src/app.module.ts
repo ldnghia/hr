@@ -19,6 +19,8 @@ import { MeModule } from './me/me.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { NotificationModule } from './notification/notification.module';
 import { AttendanceCorrectionModule } from './attendance-correction/attendance-correction.module';
+import { ShiftAssignmentModule } from './shift-assignment/shift-assignment.module';
+import { ShiftScheduleModule } from './shift-schedule/shift-schedule.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { AttendanceCorrectionModule } from './attendance-correction/attendance-c
     SystemConfigModule,
     NotificationModule,
     AttendanceCorrectionModule,
+    ShiftAssignmentModule,
+    ShiftScheduleModule,
   ],
 })
 export class AppModule {}

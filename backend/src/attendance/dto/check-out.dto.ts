@@ -1,8 +1,20 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsNumber, IsString, IsISO8601, Min, Max } from 'class-validator';
+import { IsOptional, IsNumber, IsInt, IsString, IsISO8601, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CheckOutDto {
+  @ApiPropertyOptional({ description: 'Direct attendance record ID — use when closing an unclosed session from a previous day' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  attendanceId?: number;
+
+  @ApiPropertyOptional({ description: 'Target shift ID when multiple sessions are open', example: 2 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  shiftId?: number;
+
   @ApiPropertyOptional({ example: 10.7769, description: 'GPS latitude' })
   @IsOptional()
   @Type(() => Number)

@@ -1,9 +1,17 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsInt, IsDateString, IsString } from 'class-validator';
+import { IsOptional, IsInt, IsDateString, IsString, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class ReportAttendanceDto extends PaginationDto {
+  /** Override pagination limit — report endpoint allows up to 5000 rows for full-month grid builds */
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 5000 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5000)
+  limit?: number = 20;
   @ApiPropertyOptional({ type: Number, description: 'Filter by employee ID' })
   @IsOptional()
   @Type(() => Number)

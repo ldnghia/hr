@@ -1,8 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsNumber, IsString, IsISO8601, Min, Max } from 'class-validator';
+import { IsOptional, IsNumber, IsInt, IsString, IsISO8601, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CheckInDto {
+  @ApiPropertyOptional({ description: 'Override shift ID (skips auto-detect)', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  shiftId?: number;
+
   @ApiPropertyOptional({ example: 10.7769, description: 'GPS latitude' })
   @IsOptional()
   @Type(() => Number)

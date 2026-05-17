@@ -12,14 +12,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-  ApiQuery,
-} from '@nestjs/swagger';
-import { IsOptional, IsString, IsIn } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { AttendanceService } from './attendance.service';
 import { AttendanceProcessorService } from './attendance-processor.service';
 import { ShiftService } from './shift.service';
@@ -28,37 +21,13 @@ import { ImportAttendanceDto } from './dto/import-attendance.dto';
 import { ReportAttendanceDto } from './dto/report-attendance.dto';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
+import { DailySummaryQueryDto } from './dto/daily-summary.dto';
+import { CheckInOutDto, MyRecordsQueryDto } from './dto/attendance-controller-inline.dto';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { CreateLocationDto } from './dto/create-location.dto';
-import { PaginationDto } from '../common/dto/pagination.dto';
 import { AttendanceListDto } from './dto/attendance-list.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-
-// ── Legacy manual check DTO (kept for backward compat) ──────────────────────
-class CheckInOutDto {
-  @ApiPropertyOptional({ enum: ['check_in', 'check_out'] })
-  @IsIn(['check_in', 'check_out'])
-  type: 'check_in' | 'check_out';
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  timestamp?: string;
-}
-
-// ── My-records query ──────────────────────────────────────────────────────────
-class MyRecordsDto extends PaginationDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  dateFrom?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  dateTo?: string;
-}
 
 @ApiTags('Attendance')
 @ApiBearerAuth('JWT-auth')
@@ -91,13 +60,11 @@ export class AttendanceController {
     summary: 'WFM check-in with GPS validation',
     description:
       'Validates GPS against configured work locations (if GPS provided). ' +
-      'Auto-detects active shift. Marks late if after grace period. ' +
-      'Creates an AttendanceLog entry.',
+      'Auto-detects active shift from EmployeeShiftAssignment. ' +
+      'Marks late if after grace period. Creates an AttendanceLog entry.',
   })
-  checkIn(
-    @Body() dto: CheckInDto,
-    @CurrentUser('id') employeeId: number,
-  ) {
+  @ApiResponse({ status: 200, description: 'Check-in successful; returns Attendance + shift info' })
+  checkIn(@Body() dto: CheckInDto, @CurrentUser('id') employeeId: number) {
     return this.attendanceService.checkIn(employeeId, dto);
   }
 
@@ -108,14 +75,83 @@ export class AttendanceController {
   @ApiOperation({
     summary: 'WFM check-out with OT/early-out detection',
     description:
-      'Calculates working hours. Marks overtime if worked beyond shift + grace. ' +
-      'Marks early-out if checkout before shift end - grace. Creates an AttendanceLog entry.',
+      'Calculates working hours. Marks overtime / early-out. ' +
+      'If multiple open sessions exist and shiftId is omitted → 400 with openSessions list.',
   })
-  checkOut(
-    @Body() dto: CheckOutDto,
-    @CurrentUser('id') employeeId: number,
-  ) {
+  @ApiResponse({ status: 200, description: 'Check-out successful; returns updated Attendance' })
+  @ApiResponse({ status: 400, description: 'Multiple open sessions — shiftId required' })
+  checkOut(@Body() dto: CheckOutDto, @CurrentUser('id') employeeId: number) {
     return this.attendanceService.checkOut(employeeId, dto);
+  }
+
+  // ── GET /attendance/today ─────────────────────────────────────────────────
+
+  @Get('today')
+  @ApiOperation({
+    summary: 'Get my attendance sessions for today (array)',
+    description: 'Returns all shift sessions for today. Multi-shift employees will see multiple items.',
+  })
+  @ApiResponse({ status: 200, description: 'Array of today\'s attendance sessions' })
+  getTodaySessions(@CurrentUser('id') employeeId: number) {
+    return this.attendanceService.findTodaySessions(employeeId);
+  }
+
+  // ── GET /attendance/today/active ──────────────────────────────────────────
+
+  @Get('today/active')
+  @ApiOperation({
+    summary: 'Get most recent open check-in session for today (legacy shim)',
+    description: 'Returns the latest open (no checkout) session or null. Backward-compat for single-session callers.',
+  })
+  @ApiResponse({ status: 200, description: 'Most recent open session or null' })
+  async getTodayActive(@CurrentUser('id') employeeId: number) {
+    const result = await this.attendanceService.findTodaySessions(employeeId);
+    const openSession = result.sessions
+      .filter((s: any) => s.checkinTime && !s.checkoutTime)
+      .sort((a: any, b: any) => new Date(b.checkinTime).getTime() - new Date(a.checkinTime).getTime())[0] ?? null;
+    return { data: openSession };
+  }
+
+  // ── GET /attendance/daily-summary ─────────────────────────────────────────
+
+  @Get('daily-summary')
+  @Roles('admin', 'hr', 'manager', 'employee')
+  @ApiOperation({
+    summary: 'Daily attendance summary aggregated per (employeeId, date)',
+    description: 'Aggregates multiple shift sessions per day into totalHours + sessionsCount.',
+  })
+  @ApiQuery({ name: 'from', required: false, description: 'Start date YYYY-MM-DD' })
+  @ApiQuery({ name: 'to', required: false, description: 'End date YYYY-MM-DD' })
+  @ApiQuery({ name: 'employeeId', required: false, type: Number, description: 'Filter by employee (admin/hr/manager)' })
+  @ApiResponse({ status: 200, description: 'Array of daily summary objects' })
+  getDailySummary(
+    @CurrentUser() user: { id: number; role: string },
+    @Query() query: DailySummaryQueryDto,
+  ) {
+    return this.attendanceService.getDailySummary(user, query.from, query.to, query.employeeId);
+  }
+
+  // ── GET /attendance/unclosed ──────────────────────────────────────────────
+
+  @Get('unclosed')
+  @ApiOperation({
+    summary: 'Get my unclosed check-in sessions from previous days',
+    description: 'Returns sessions where checkinTime is set but checkoutTime is null, dated before today.',
+  })
+  getUnclosedSessions(@CurrentUser('id') employeeId: number) {
+    return this.attendanceService.getUnclosedSessions(employeeId);
+  }
+
+  // ── GET /attendance/my-shifts/current-month ───────────────────────────────
+
+  @Get('my-shifts/current-month')
+  @ApiOperation({
+    summary: 'List shifts assigned to me for the current month',
+    description: 'Reads EmployeeShiftAssignment for current year+month. Used by frontend session cards.',
+  })
+  @ApiResponse({ status: 200, description: 'Array of { shiftId, shiftName, startTime, endTime, code }' })
+  getMyShiftsCurrentMonth(@CurrentUser('id') employeeId: number) {
+    return this.attendanceService.getMyShiftsCurrentMonth(employeeId);
   }
 
   // ── GET /attendance/me ────────────────────────────────────────────────────
@@ -126,28 +162,9 @@ export class AttendanceController {
   @ApiQuery({ name: 'dateTo', required: false })
   getMyRecords(
     @CurrentUser('id') employeeId: number,
-    @Query() query: MyRecordsDto,
+    @Query() query: MyRecordsQueryDto,
   ) {
     return this.attendanceService.getMyRecords(employeeId, query);
-  }
-
-  // ── POST /attendance/check (legacy) ──────────────────────────────────────
-
-  @Post('check')
-  @ApiOperation({ summary: 'Legacy manual check-in or check-out (no GPS)' })
-  checkInOut(
-    @Body() dto: CheckInOutDto,
-    @CurrentUser('id') employeeId: number,
-  ) {
-    return this.attendanceService.checkInOut(employeeId, dto.type, dto.timestamp);
-  }
-
-  // ── GET /attendance/today ─────────────────────────────────────────────────
-
-  @Get('today')
-  @ApiOperation({ summary: 'Get my attendance status for today' })
-  getTodayStatus(@CurrentUser('id') employeeId: number) {
-    return this.attendanceService.findTodayStatus(employeeId);
   }
 
   // ── GET /attendance/summary ───────────────────────────────────────────────
@@ -169,14 +186,20 @@ export class AttendanceController {
     );
   }
 
+  // ── POST /attendance/check (legacy) ──────────────────────────────────────
+
+  @Post('check')
+  @ApiOperation({ summary: 'Legacy manual check-in or check-out (no GPS)' })
+  checkInOut(@Body() dto: CheckInOutDto, @CurrentUser('id') employeeId: number) {
+    return this.attendanceService.checkInOut(employeeId, dto.type, dto.timestamp);
+  }
+
   // ── GET /attendance/report ────────────────────────────────────────────────
+
   @Get('report')
   @Roles('admin', 'hr', 'manager', 'employee')
   @ApiOperation({ summary: 'Attendance report with filters' })
-  getReport(
-    @Query() dto: ReportAttendanceDto,
-    @CurrentUser() user: { id: number; role: string }
-  ) {
+  getReport(@Query() dto: ReportAttendanceDto, @CurrentUser() user: { id: number; role: string }) {
     return this.attendanceService.getReport(dto, user);
   }
 
@@ -186,7 +209,7 @@ export class AttendanceController {
   exportReport(
     @Query() dto: ReportAttendanceDto,
     @CurrentUser() user: { id: number; role: string },
-    @Res() res: any,
+    @Res() res: Response,
   ) {
     return this.attendanceService.exportReport(dto, user, res);
   }
@@ -197,7 +220,7 @@ export class AttendanceController {
   exportGridReport(
     @Query() dto: ReportAttendanceDto,
     @CurrentUser() user: { id: number; role: string },
-    @Res() res: any,
+    @Res() res: Response,
   ) {
     return this.attendanceService.exportGridReport(dto, user, res);
   }
@@ -208,7 +231,7 @@ export class AttendanceController {
   exportSummaryReport(
     @Query() dto: ReportAttendanceDto,
     @CurrentUser() user: { id: number; role: string },
-    @Res() res: any,
+    @Res() res: Response,
   ) {
     return this.attendanceService.exportSummaryReport(dto, user, res);
   }
@@ -242,7 +265,7 @@ export class AttendanceController {
     );
   }
 
-  // ══ Shifts ══════════════════════════════════════════════════════════════════
+  // ══ Shifts ════════════════════════════════════════════════════════════════
 
   @Get('shifts')
   @ApiOperation({ summary: 'List all shifts' })
@@ -260,14 +283,11 @@ export class AttendanceController {
   @Patch('shifts/:id')
   @Roles('admin', 'hr')
   @ApiOperation({ summary: 'Update a shift (admin, hr)' })
-  updateShift(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: Partial<CreateShiftDto>,
-  ) {
+  updateShift(@Param('id', ParseIntPipe) id: number, @Body() dto: Partial<CreateShiftDto>) {
     return this.shiftService.update(id, dto);
   }
 
-  // ══ Locations ════════════════════════════════════════════════════════════════
+  // ══ Locations ════════════════════════════════════════════════════════════
 
   @Get('locations')
   @ApiOperation({ summary: 'List all work locations' })
@@ -285,10 +305,7 @@ export class AttendanceController {
   @Patch('locations/:id')
   @Roles('admin', 'hr')
   @ApiOperation({ summary: 'Update a work location (admin, hr)' })
-  updateLocation(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: Partial<CreateLocationDto>,
-  ) {
+  updateLocation(@Param('id', ParseIntPipe) id: number, @Body() dto: Partial<CreateLocationDto>) {
     return this.locationService.update(id, dto);
   }
 }

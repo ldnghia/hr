@@ -100,6 +100,11 @@ model Employee {
   resignationRequests  ResignationRequest[]
   correctionRequests   AttendanceCorrectionRequest[] @relation("CorrectionRequester")
   correctionReviews    AttendanceCorrectionRequest[] @relation("CorrectionReviewer")
+  shiftAssignments     EmployeeShiftAssignment[]
+  shiftSchedules       EmployeeShiftSchedule[]   @relation("EmployeeToShiftSchedule")
+  createdShiftSchedules EmployeeShiftSchedule[]  @relation("ScheduleCreatedBy")
+  dayOffs              EmployeeDayOff[]          @relation("EmployeeToDayOff")
+  createdDayOffs       EmployeeDayOff[]          @relation("DayOffCreatedBy")
 
   @@map("employee")
 }
@@ -252,6 +257,7 @@ model Shift {
   assignments         EmployeeShiftAssignment[]
   department          Department?               @relation(fields: [departmentId], references: [id])
   correctionRequests  AttendanceCorrectionRequest[] @relation("CorrectionRequestedShift")
+  schedules           EmployeeShiftSchedule[]       @relation("ShiftToSchedule")
 
   @@map("shift")
 }
@@ -261,9 +267,14 @@ model EmployeeShiftAssignment {
   employeeId    Int      @map("employee_id")
   shiftId       Int      @map("shift_id")
   effectiveDate DateTime @map("effective_date") @db.Date
+  year          Int
+  month         Int
   createdAt     DateTime @default(now()) @map("created_at")
+  employee      Employee @relation(fields: [employeeId], references: [id])
   shift         Shift    @relation(fields: [shiftId], references: [id])
 
+  @@unique([employeeId, shiftId, year, month])
+  @@index([employeeId, year, month])
   @@map("employee_shift_assignment")
 }
 
@@ -327,7 +338,8 @@ model Attendance {
   shift               Shift?    @relation(fields: [shiftId], references: [id])
   corrections         AttendanceCorrectionRequest[] @relation("AttendanceToCorrections")
 
-  @@unique([employeeId, date])
+  @@unique([employeeId, date, shiftId])
+  @@index([employeeId, date])
   @@map("attendance")
 }
 
@@ -473,4 +485,43 @@ model AuditLog {
   user      Employee? @relation(fields: [userId], references: [id])
 
   @@map("audit_log")
+}
+
+// ─── Per-day shift schedule (nhân viên ca xoay) ───────────────────────────────
+
+model EmployeeShiftSchedule {
+  id          Int       @id @default(autoincrement())
+  employeeId  Int       @map("employee_id")
+  shiftId     Int       @map("shift_id")
+  date        DateTime  @db.Date @map("date")
+  note        String?
+  createdById Int?      @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  employee    Employee  @relation("EmployeeToShiftSchedule", fields: [employeeId], references: [id])
+  shift       Shift     @relation("ShiftToSchedule", fields: [shiftId], references: [id])
+  createdBy   Employee? @relation("ScheduleCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([employeeId, date, shiftId])
+  @@index([employeeId, date])
+  @@map("employee_shift_schedule")
+}
+
+// ─── Day-off records (OFF / AL / SL / H) ─────────────────────────────────────
+
+model EmployeeDayOff {
+  id          Int       @id @default(autoincrement())
+  employeeId  Int       @map("employee_id")
+  date        DateTime  @db.Date @map("date")
+  offType     String    @map("off_type")   // OFF | AL | SL | H
+  note        String?
+  createdById Int?      @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  employee    Employee  @relation("EmployeeToDayOff", fields: [employeeId], references: [id])
+  createdBy   Employee? @relation("DayOffCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([employeeId, date])
+  @@index([employeeId, date])
+  @@map("employee_day_off")
 }

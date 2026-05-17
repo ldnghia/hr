@@ -199,6 +199,13 @@ export class LeaveApprovalService {
 
     // 3. Mark each leave calendar day as attendance (absent-valid)
     if (request.fromDate && request.toDate) {
+      // Resolve employee default shift for the leave attendance record
+      const emp = await this.prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { shiftId: true },
+      });
+      const defaultShiftId = emp?.shiftId ?? 1; // fall back to global default shift
+
       const cursor = new Date(request.fromDate);
       const end = new Date(request.toDate);
 
@@ -206,10 +213,11 @@ export class LeaveApprovalService {
         const dateOnly = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate()));
 
         await this.prisma.attendance.upsert({
-          where: { employeeId_date: { employeeId, date: dateOnly } },
+          where: { employeeId_date_shiftId: { employeeId, date: dateOnly, shiftId: defaultShiftId } },
           create: {
             employeeId,
             date: dateOnly,
+            shiftId: defaultShiftId,
             isOnLeave: true,
             leaveRequestId,
           },
