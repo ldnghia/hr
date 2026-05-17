@@ -6,6 +6,7 @@
     "departments": "Departments",
     "positions": "Positions",
     "workingShifts": "Working Shifts",
+    "shiftAssignments": "Shift Assignments",
     "leave": "Leave",
     "attendance": "Attendance",
     "calendar": "Calendar",
@@ -443,7 +444,16 @@
     "prev": "Prev",
     "next": "Next",
     "correctionPending": "Correction Pending",
-    "correctionRejected": "Correction Rejected"
+    "correctionRejected": "Correction Rejected",
+    "sessionPending": "Pending",
+    "sessionActive": "Active",
+    "sessionDone": "Done",
+    "noShiftsThisMonth": "No shifts assigned this month",
+    "dailySummary": "Daily Summary",
+    "sessionsDone": "Sessions done",
+    "pickShiftToCheckout": "Select shift to check out",
+    "multipleOpenSessionsMsg": "Multiple shifts are open. Select which one to check out:",
+    "todaySessionsTitle": "Today's Shifts"
   },
   "calendar": {
     "title": "Calendar",

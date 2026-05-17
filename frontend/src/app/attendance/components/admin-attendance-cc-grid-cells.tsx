@@ -1,0 +1,314 @@
+'use client';
+
+import type { DayCell, ShiftEntry } from './admin-attendance-report-types';
+import { STATUS_META } from './admin-attendance-report-types';
+
+// ─── Status-based colour tokens ───────────────────────────────────────────────
+// Cells colour by work-hours status, not by shift type.
+
+/** Returns background + text colour based on whether the shift met its hour quota.
+ *  For all statuses that have a checkout, colour is driven by hour sufficiency so
+ *  the cell is green when hours are met (even if the employee was late/early).
+ *  Late/early status is surfaced separately via badge flags, not cell colour. */
+function shiftStatusStyle(shift: ShiftEntry): { background: string; color: string } {
+  const { status, hasNoCheckout, workingHours, normalHours } = shift;
+
+  if (status === 'absent')
+    return { background: 'oklch(52% 0.22 18 / 0.15)', color: 'oklch(42% 0.22 18)' };
+
+  if (hasNoCheckout)
+    return { background: 'oklch(60% 0.15 75 / 0.20)', color: 'oklch(46% 0.15 75)' };
+
+  // All statuses with checkin+checkout: colour by hour sufficiency
+  const sufficient = (normalHours ?? 0) > 0
+    ? (workingHours ?? 0) >= (normalHours ?? 0)
+    : status !== 'absent';
+  return sufficient
+    ? { background: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(44% 0.16 152)' } // green
+    : { background: 'oklch(60% 0.15 75 / 0.18)',  color: 'oklch(46% 0.15 75)'  }; // amber
+}
+
+// OT dot — distinguishes OT (bright green) from plain ok (same green bg)
+const OT_DOT = 'oklch(60% 0.17 45)';
+
+// ─── Tooltip ─────────────────────────────────────────────────────────────────
+
+export interface CcTooltipData {
+  empName: string;
+  cell: DayCell;
+  x: number;
+  y: number;
+}
+
+/** Cell-level status flags shown at the top of the hover tooltip. */
+function TooltipFlags({ cell }: { cell: DayCell }) {
+  const shifts = cell.shifts ?? [];
+  const hasLate    = (cell.lateMinutes ?? 0) > 0 || shifts.some(s => (s.lateMinutes ?? 0) > 0);
+  const hasEarly   = (cell.earlyMinutes ?? 0) > 0 || shifts.some(s => (s.earlyMinutes ?? 0) > 0);
+  const corrected  = cell.isCorrected || cell.correctionStatus === 'approved'
+                     || shifts.some(s => s.correctionStatus === 'approved');
+  const inOffice   = cell.isInOffice === true;
+
+  if (!hasLate && !hasEarly && !corrected && !inOffice) return null;
+
+  const flags: { label: string; bg: string; color: string }[] = [];
+  if (hasLate)   flags.push({ label: 'Đi muộn',        bg: 'oklch(58% 0.20 28 / 0.15)',  color: 'oklch(44% 0.20 28)'  });
+  if (hasEarly)  flags.push({ label: 'Về sớm',          bg: 'oklch(54% 0.13 245 / 0.15)', color: 'oklch(40% 0.13 245)' });
+  if (corrected) flags.push({ label: 'Đã điều chỉnh',   bg: 'oklch(71% 0.10 295 / 0.18)', color: 'oklch(42% 0.14 295)' });
+  if (inOffice)  flags.push({ label: 'Trong VP',        bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' });
+
+  return (
+    <div className="mb-2 flex flex-wrap gap-1">
+      {flags.map(({ label, bg, color }) => (
+        <span key={label}
+          className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
+          style={{ background: bg, color }}>
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export function CcTooltip({ data }: { data: CcTooltipData }) {
+  const { empName, cell } = data;
+  const shifts = cell.shifts ?? [];
+
+  return (
+    <div
+      className="pointer-events-none fixed z-[200] max-w-[260px] rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs shadow-xl"
+      style={{ left: data.x, top: data.y }}
+    >
+      <p className="mb-1.5 font-semibold text-gray-900">
+        {empName} <span className="font-normal text-gray-400">· Ngày {String(cell.day).padStart(2, '0')}</span>
+      </p>
+      <TooltipFlags cell={cell} />
+      {shifts.length === 0 ? (
+        <p className="text-gray-400">Nghỉ</p>
+      ) : (
+        shifts.map((s, i) => (
+          <div key={i} className="mt-1.5 rounded-md px-2 py-1.5 space-y-0.5" style={shiftStatusStyle(s)}>
+            {/* shift header: code + name */}
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono font-bold text-[11px]">{s.shiftCode}</span>
+              {s.shiftName && <span className="text-[10px] opacity-70">{s.shiftName}</span>}
+            </div>
+            {/* times */}
+            {s.checkinTime && (
+              <div className="text-[10px] font-mono opacity-80">
+                {s.checkinTime} → {s.checkoutTime ?? '—'}
+              </div>
+            )}
+            {/* working hours + sufficient indicator */}
+            {s.checkinTime && (() => {
+              const sufficient = !s.hasNoCheckout && (s.normalHours ?? 0) > 0 && (s.workingHours ?? 0) >= (s.normalHours ?? 0);
+              const insufficient = !s.hasNoCheckout && (s.normalHours ?? 0) > 0 && (s.workingHours ?? 0) < (s.normalHours ?? 0);
+              return (
+                <div className="text-[10px] opacity-80 flex items-center gap-1 flex-wrap">
+                  <span>Giờ làm: <span className="font-semibold">{(s.workingHours ?? 0) > 0 ? `${s.workingHours}h` : '—'}</span></span>
+                  {sufficient && (
+                    <span className="rounded px-1 py-0.5 text-[9px] font-semibold"
+                      style={{ background: 'oklch(54% 0.16 152 / 0.20)', color: 'oklch(38% 0.16 152)' }}>
+                      ✓ Đủ giờ
+                    </span>
+                  )}
+                  {insufficient && (
+                    <span className="rounded px-1 py-0.5 text-[9px] font-semibold"
+                      style={{ background: 'oklch(58% 0.20 28 / 0.15)', color: 'oklch(44% 0.20 28)' }}>
+                      ✗ Thiếu
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+            {/* status flags */}
+            {s.hasNoCheckout && (
+              <div className="text-[10px]" style={{ color: 'oklch(58% 0.18 50)' }}>
+                ⚠ Chưa checkout
+              </div>
+            )}
+            {(s.lateMinutes ?? 0) > 0 && (
+              <div className="text-[10px]" style={{ color: 'oklch(48% 0.20 28)' }}>
+                Đi trễ: <span className="font-semibold">+{s.lateMinutes}p</span>
+              </div>
+            )}
+            {(s.earlyMinutes ?? 0) > 0 && (
+              <div className="text-[10px]" style={{ color: 'oklch(46% 0.15 75)' }}>
+                Về sớm: <span className="font-semibold">-{s.earlyMinutes}p</span>
+              </div>
+            )}
+            {(s.otHours ?? 0) > 0 && (
+              <div className="text-[10px]" style={{ color: OT_DOT }}>
+                Tăng ca: <span className="font-semibold">+{s.otHours}h</span>
+              </div>
+            )}
+            {s.correctionStatus === 'pending' && (
+              <div className="text-[10px] font-semibold" style={{ color: 'oklch(55% 0.18 50)' }}>● Chờ duyệt chỉnh sửa</div>
+            )}
+            {s.correctionStatus === 'approved' && (
+              <div className="text-[10px] font-semibold" style={{ color: 'oklch(44% 0.16 152)' }}>✓ Đã duyệt chỉnh sửa</div>
+            )}
+            {s.correctionStatus === 'rejected' && (
+              <div className="text-[10px] font-semibold" style={{ color: 'oklch(42% 0.22 18)' }}>✗ Yêu cầu bị từ chối</div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+// ─── Single shift badge (used in multi-shift stacked layout) ─────────────────
+
+function ShiftBadge({ shift, rounded }: { shift: ShiftEntry; rounded: string }) {
+  const isOt = shift.status === 'ot';
+  return (
+    <div
+      className={`h-4 flex shrink-0 items-center justify-center font-mono text-[9px] font-bold relative ${rounded}`}
+      style={shiftStatusStyle(shift)}
+    >
+      {shift.shiftCode}
+      {isOt && (
+        <span className="absolute right-[1px] top-[1px] h-1 w-1 rounded-full"
+          style={{ background: OT_DOT }} />
+      )}
+      {shift.correctionStatus && (
+        <span className="absolute top-[1px] left-[1px] h-1 w-1 rounded-full shadow-[0_0_0_1px_white]"
+          style={{ background: 'oklch(58% 0.16 295)' }} />
+      )}
+    </div>
+  );
+}
+
+// ─── CC Cell ─────────────────────────────────────────────────────────────────
+
+interface CcCellProps {
+  cell: DayCell;
+  dow?: number;
+  onMouseEnter: (e: React.MouseEvent, c: DayCell) => void;
+  onMouseLeave: () => void;
+}
+
+/** Consistent border style for day-column cells; Saturday gets a thicker week separator. */
+function dayCellStyle(dow?: number): React.CSSProperties {
+  return dow === 6
+    ? { borderRight: '2px solid #9ca3af', borderBottom: '1px solid #e5e7eb' }
+    : { borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' };
+}
+
+export function CcCell({ cell, dow, onMouseEnter, onMouseLeave }: CcCellProps) {
+  const shifts = cell.shifts ?? [];
+  const isOff = cell.status === 'off' || cell.status === 'future' || shifts.length === 0;
+  const isDouble = shifts.length >= 2;
+
+  if (isOff) {
+    return (
+      <td
+        className="day-cell w-12 min-w-[48px] p-0.5"
+        style={dayCellStyle(dow)}
+        onMouseEnter={(e) => onMouseEnter(e, cell)}
+        onMouseLeave={onMouseLeave}
+      >
+        <div className="flex h-[34px] w-full items-center justify-center font-mono text-[11px] text-gray-300">·</div>
+      </td>
+    );
+  }
+
+  if (isDouble) {
+    return (
+      <td
+        className="day-cell w-12 min-w-[48px] p-0.5"
+        style={dayCellStyle(dow)}
+        onMouseEnter={(e) => onMouseEnter(e, cell)}
+        onMouseLeave={onMouseLeave}
+      >
+        <div className="flex w-full flex-col gap-[1px]">
+          {shifts.map((shift, i) => (
+            <ShiftBadge
+              key={i}
+              shift={shift}
+              rounded={
+                i === 0 ? 'rounded-t-[3px]' :
+                i === shifts.length - 1 ? 'rounded-b-[3px]' :
+                'rounded-none'
+              }
+            />
+          ))}
+        </div>
+      </td>
+    );
+  }
+
+  // Single shift — show shift code + status glyph
+  const s = shifts[0];
+  const isOt = s.status === 'ot';
+  const isSufficient = !s.hasNoCheckout && (s.normalHours ?? 0) > 0 && (s.workingHours ?? 0) >= (s.normalHours ?? 0);
+  const glyph = isSufficient ? '✓' : s.shiftCode;
+
+  return (
+    <td
+      className="day-cell w-12 min-w-[48px] p-0.5"
+      style={dayCellStyle(dow)}
+      onMouseEnter={(e) => onMouseEnter(e, cell)}
+      onMouseLeave={onMouseLeave}
+    >
+      <div
+        className="relative flex h-[34px] w-full items-center justify-center gap-1 rounded-[5px] font-mono text-[11px] font-bold"
+        style={shiftStatusStyle(s)}
+      >
+        <span>{glyph}</span>
+        {s.shiftCode !== '?' && glyph === '✓' && (
+          <span className="text-[9px] opacity-60">{s.shiftCode}</span>
+        )}
+        {isOt && (
+          <span className="absolute right-[2px] top-[2px] h-1.5 w-1.5 rounded-full shadow-[0_0_0_1px_white]"
+            style={{ background: OT_DOT }} />
+        )}
+        {(cell.isCorrected || (s.correctionStatus ?? cell.correctionStatus)) && (
+          <span className="absolute top-[2px] left-[2px] h-1.5 w-1.5 rounded-full shadow-[0_0_0_1px_white]"
+            style={{ background: 'oklch(58% 0.16 295)' }} />
+        )}
+      </div>
+    </td>
+  );
+}
+
+// ─── Coverage row cell ────────────────────────────────────────────────────────
+
+interface CoverageData {
+  /** Count per day index (0-based) */
+  counts: number[];
+}
+
+export function CoverageRow({
+  label, counts, daysInMonth, year, month,
+}: { label: string; counts: number[]; daysInMonth: number; year: number; month: number }) {
+  return (
+    <tr>
+      <td
+        className="sticky left-0 z-[5] border-b border-r-2 border-gray-200 bg-gray-50 px-3 py-1 text-[10px] font-semibold text-gray-500"
+        style={{ minWidth: 220 }}
+      >
+        {label}
+      </td>
+      {Array.from({ length: daysInMonth }, (_, i) => {
+        const n = counts[i] ?? 0;
+        const dow = new Date(year, month - 1, i + 1).getDay();
+        const bg = n >= 2 ? 'oklch(54% 0.16 152 / 0.15)' : n === 1 ? 'oklch(60% 0.15 75 / 0.20)' : 'oklch(52% 0.22 18 / 0.12)';
+        const color = n >= 2 ? 'oklch(44% 0.16 152)' : n === 1 ? 'oklch(48% 0.15 75)' : 'oklch(42% 0.22 18)';
+        return (
+          <td key={i} className="w-12 min-w-[48px] p-0.5" style={dayCellStyle(dow)}>
+            <div
+              className="flex h-[22px] w-full items-center justify-center rounded font-mono text-[10px] font-bold"
+              style={{ background: bg, color }}
+            >
+              {n > 0 ? n : '·'}
+            </div>
+          </td>
+        );
+      })}
+      {/* summary col spacers */}
+      <td colSpan={2} className="border-b border-l border-gray-100 bg-gray-50" />
+    </tr>
+  );
+}

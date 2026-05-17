@@ -32,8 +32,11 @@ export function ServiceWorkerRegistration() {
       .then((registration) => {
         console.log('[SW] Registered, scope:', registration.scope);
 
-        // Handle updates for SWs that are already waiting when the page loads.
-        if (registration.waiting) {
+        // Handle updates for SWs already waiting when the page loads.
+        // Guard: only activate if there's an existing controller — meaning this
+        // is a genuine update, not the first install (first install has no
+        // controller yet and should never force a reload).
+        if (registration.waiting && navigator.serviceWorker.controller) {
           activateWaiting(registration.waiting);
           return;
         }

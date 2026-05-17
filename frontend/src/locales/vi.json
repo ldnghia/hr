@@ -6,6 +6,7 @@
     "departments": "Phòng ban",
     "positions": "Chức vụ",
     "workingShifts": "Ca làm việc",
+    "shiftAssignments": "Phân ca",
     "leave": "Nghỉ phép",
     "attendance": "Chấm công",
     "calendar": "Lịch",
@@ -443,7 +444,16 @@
     "prev": "Trước",
     "next": "Tiếp",
     "correctionPending": "Chờ duyệt ĐC",
-    "correctionRejected": "Từ chối ĐC"
+    "correctionRejected": "Từ chối ĐC",
+    "sessionPending": "Chưa vào",
+    "sessionActive": "Đang làm",
+    "sessionDone": "Xong",
+    "noShiftsThisMonth": "Không có ca nào được phân công tháng này",
+    "dailySummary": "Tổng kết ngày",
+    "sessionsDone": "Ca đã hoàn thành",
+    "pickShiftToCheckout": "Chọn ca để chấm công ra",
+    "multipleOpenSessionsMsg": "Có nhiều ca đang mở. Chọn ca bạn muốn chấm công ra:",
+    "todaySessionsTitle": "Ca làm việc hôm nay"
   },
   "calendar": {
     "title": "Lịch",

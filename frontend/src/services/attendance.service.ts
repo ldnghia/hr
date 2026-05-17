@@ -5,6 +5,8 @@ import type {
   Shift,
   WorkLocation,
   PaginatedResponse,
+  AttendanceSession,
+  MonthlyShift,
 } from '@/types';
 
 // ─── Payload types ────────────────────────────────────────────────────────────
@@ -42,6 +44,16 @@ export interface CheckOutPayload {
   deviceId?: string;
   timestamp?: string;
   locationNote?: string;
+  /** Required when server returns 400 with multiple open sessions */
+  shiftId?: number;
+  /** Direct record ID — used when closing unclosed sessions from previous days */
+  attendanceId?: number;
+}
+
+/** Error body returned by server when checkout has 2+ open sessions */
+export interface MultipleOpenSessionsError {
+  message: string;
+  openSessions: Array<{ shiftId: number; shiftName: string; checkinTime: string }>;
 }
 
 export interface MyRecordsParams {
@@ -142,6 +154,18 @@ export const attendanceService = {
   /** GET /attendance/me — my attendance history (paginated) */
   me: (params?: MyRecordsParams) =>
     api.get<PaginatedResponse<AttendanceRecord>>('/attendance/me', { params }).then((r) => r.data),
+
+  /** GET /attendance/today — all sessions for today (multi-shift) */
+  todaySessions: () =>
+    api.get<{ sessions: AttendanceSession[] }>('/attendance/today').then((r) => r.data.sessions ?? []),
+
+  /** GET /attendance/unclosed — sessions from previous days missing checkout */
+  unclosedSessions: () =>
+    api.get<{ data: AttendanceSession[] }>('/attendance/unclosed').then((r) => r.data.data ?? []),
+
+  /** GET /attendance/my-shifts/current-month — assigned shifts this month */
+  myShiftsCurrentMonth: () =>
+    api.get<{ data: MonthlyShift[] }>('/attendance/my-shifts/current-month').then((r) => r.data.data),
 
   // ── Shifts ───────────────────────────────────────────────────────────────────
 

@@ -21,7 +21,7 @@
 // ─── Cache versioning ────────────────────────────────────────────────────────
 // Bump CACHE_VERSION to force all clients to receive the new SW on next visit.
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const PRECACHE_NAME = `hr-precache-${CACHE_VERSION}`;  // shell assets, offline page
 const DYNAMIC_CACHE = `hr-dynamic-${CACHE_VERSION}`;   // runtime pages / icons
 
@@ -78,14 +78,14 @@ function isNavigation(request) {
 // ─── Install: precache shell ──────────────────────────────────────────────────
 
 self.addEventListener('install', (event) => {
+  // Do NOT call skipWaiting() unconditionally — it triggers a controllerchange
+  // on first install which causes ServiceWorkerRegistration.tsx to reload the
+  // page, adding 2-5 seconds of unnecessary cold-start latency.
+  // skipWaiting is sent explicitly via postMessage only for genuine updates.
   event.waitUntil(
     caches
       .open(PRECACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .then(() => {
-        // Take control immediately; don't wait for old SW to die.
-        self.skipWaiting();
-      }),
+      .then((cache) => cache.addAll(PRECACHE_URLS)),
   );
 });
 
@@ -127,26 +127,11 @@ self.addEventListener('message', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Let the browser handle non-cacheable requests normally.
-  if (shouldBypass(request)) {
-    // For API calls that are GET, return a structured offline error instead of
-    // a browser network error, so the frontend can show a friendly message.
-    if (request.method === 'GET') {
-      const url = new URL(request.url);
-      if (url.pathname.startsWith('/api/')) {
-        event.respondWith(
-          fetch(request).catch(
-            () =>
-              new Response(
-                JSON.stringify({ error: 'offline', message: 'No internet connection' }),
-                { status: 503, headers: { 'Content-Type': 'application/json' } },
-              ),
-          ),
-        );
-      }
-    }
-    return;
-  }
+  // Let the browser handle all bypassed requests natively (API calls, POST, cross-origin).
+  // Do NOT call event.respondWith() here — that would cause the SW to intercept
+  // API GET requests and trigger a double-fetch, producing stale 304 responses
+  // that can confuse the auth flow (profile returning 304 via SW after login).
+  if (shouldBypass(request)) return;
 
   const url = new URL(request.url);
 

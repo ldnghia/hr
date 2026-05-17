@@ -73,7 +73,7 @@ export default function DashboardPage() {
           // 3. Pending leave requests (up to 5 for the table)
           leaveService.listAll({ status: 'pending', limit: 5 }),
           // 4. Active contracts (filter expiring ≤ 30 days client-side)
-          contractService.list({ status: 'active', limit: 100 }),
+          contractService.list({ status: 'active', limit: 30 }),
         ]);
 
       // ── Process employee stats ─────────────────────────────────────────────

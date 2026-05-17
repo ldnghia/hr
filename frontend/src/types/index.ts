@@ -315,6 +315,119 @@ export interface CalendarSummary {
   total: number;
 }
 
+// ─── Shift Assignment ─────────────────────────────────────────────────────────
+
+export interface ShiftAssignment {
+  id: number;
+  employeeId: number;
+  shiftId: number;
+  year: number;
+  month: number;
+  effectiveDate: string;
+  createdAt: string;
+  shift?: Pick<Shift, 'id' | 'name' | 'startTime' | 'endTime'>;
+  employee?: Pick<Employee, 'id' | 'code' | 'fullName'>;
+}
+
+export interface ShiftAssignmentEntry {
+  assignmentId: number;
+  shiftId: number;
+  shiftName: string;
+  startTime: string;
+  endTime: string;
+  /** true = matches Employee.shiftId (default shift) */
+  isDefault: boolean;
+}
+
+export interface ShiftAssignmentRow {
+  employee: {
+    id: number;
+    code: string | null;
+    fullName: string | null;
+    department: { id: number; name: string } | null;
+    defaultShiftId: number | null;
+    /** FIXED = hành chính (only default shift); SHIFT = ca xoay (no default shift) */
+    workingMode: 'FIXED' | 'SHIFT' | string;
+  };
+  assignments: ShiftAssignmentEntry[];
+}
+
+export interface ShiftSummary {
+  id: number;
+  name: string;
+  startTime: string;
+  endTime: string;
+  departmentId?: number | null;
+  isDefault?: boolean;
+}
+
+export interface ShiftAssignmentMatrixResponse {
+  initialized: boolean;
+  rows: ShiftAssignmentRow[];
+  shifts: ShiftSummary[];
+}
+
+// ─── Per-day Shift Schedule ───────────────────────────────────────────────────
+
+/** One per-day shift assignment record (employee × date × shift) */
+export interface EmployeeShiftSchedule {
+  id: number;
+  employeeId: number;
+  shiftId: number;
+  date: string;       // YYYY-MM-DD
+  note?: string | null;
+  shift: { id: number; name: string; startTime: string; endTime: string };
+  employee?: { id: number; code: string | null; fullName: string | null };
+}
+
+/** Day-off record: OFF | AL | SL | H */
+export interface DayOff {
+  id: number;
+  employeeId: number;
+  date: string;       // YYYY-MM-DD
+  offType: 'OFF' | 'AL' | 'SL' | 'H';
+  note?: string | null;
+  employee?: { id: number; code: string | null; fullName: string | null };
+}
+
+// ─── Multi-shift Attendance (Phase 04) ────────────────────────────────────────
+
+/** One session returned by GET /attendance/today */
+export interface AttendanceSession {
+  id: number;
+  employeeId: number;
+  date: string;
+  checkinTime?: string | null;
+  checkoutTime?: string | null;
+  workingHours?: number | string | null;
+  shiftId?: number | null;
+  shift?: Pick<Shift, 'id' | 'name' | 'startTime' | 'endTime'> | null;
+  isLate: boolean;
+  isEarlyOut: boolean;
+  isOvertime: boolean;
+  overtimeHours?: number | string | null;
+  isInOffice?: boolean;
+  checkinNote?: string | null;
+  checkoutNote?: string | null;
+  isCorrected?: boolean;
+  correctionRequestId?: number | null;
+}
+
+/** Shape of GET /attendance/my-shifts/current-month items */
+export interface MonthlyShift {
+  shiftId: number;
+  shiftName: string;
+  startTime: string;
+  endTime: string;
+}
+
+/** Aggregated daily totals from GET /attendance/daily-summary */
+export interface DailySummary {
+  date: string;
+  totalWorkingHours: number;
+  sessionsCount: number;
+}
+
 // ─── Resignation ──────────────────────────────────────────────────────────────
 
 export type ResignationStatus = 'pending' | 'approved' | 'rejected' | 'completed';
