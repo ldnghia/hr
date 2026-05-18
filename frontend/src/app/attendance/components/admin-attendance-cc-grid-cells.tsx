@@ -69,7 +69,7 @@ function shiftStatusStyle(shift: ShiftEntry): { background: string; color: strin
     return { background: 'oklch(60% 0.15 75 / 0.20)', color: 'oklch(46% 0.15 75)' };
   const sufficient = (normalHours ?? 0) > 0
     ? (workingHours ?? 0) >= (normalHours ?? 0)
-    : status !== 'absent';
+    : true;
   return sufficient
     ? { background: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(44% 0.16 152)' }
     : { background: 'oklch(60% 0.15 75 / 0.18)',  color: 'oklch(46% 0.15 75)'  };

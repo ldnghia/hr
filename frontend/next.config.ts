@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
    * uses its existence as a signal to skip Turbopack initialisation.
    */
   webpack: (config) => config,
+  turbopack: {},
 
   /**
    * Allow requests from LAN IPs and the custom domain on BOTH ports
