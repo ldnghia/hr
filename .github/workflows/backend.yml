@@ -70,6 +70,7 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_CALLBACK_URL: ${{ secrets.GOOGLE_CALLBACK_URL }}
+          FRONTEND_OAUTH_REDIRECT_URL: ${{ secrets.FRONTEND_OAUTH_REDIRECT_URL }}
         run: |
           cd /home/phamhai/hr/hr_project
           pm2 reload ecosystem.config.js --only hr-backend --update-env || pm2 start ecosystem.config.js --only hr-backend
