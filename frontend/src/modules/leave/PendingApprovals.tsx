@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { statusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -21,6 +22,7 @@ export function PendingApprovals({
   onReject,
 }: PendingApprovalsProps) {
   const { t } = useTranslation();
+  const router = useRouter();
 
   if (!loading && requests.length === 0) return null;
 
@@ -47,7 +49,8 @@ export function PendingApprovals({
           {requests.map((req) => (
             <div
               key={req.id}
-              className="flex flex-wrap items-center justify-between gap-3 px-6 py-4"
+              className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 cursor-pointer hover:bg-amber-100/40 transition-colors"
+              onClick={() => router.push(`/leave/${req.id}`)}
             >
               {/* Employee info */}
               <div className="flex items-center gap-3 min-w-0">
@@ -64,23 +67,30 @@ export function PendingApprovals({
                 </div>
               </div>
 
-              {/* Leave info */}
-              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                {statusBadge(req.type)}
-                <span>
-                  {formatDate(req.fromDate)}
-                  {req.fromDate !== req.toDate && <> → {formatDate(req.toDate)}</>}
-                </span>
-                <span className="font-medium text-gray-800">
-                  {req.days} {t('common.day')}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {t('common.step')} {req.currentStep}/2
-                </span>
+              {/* Leave info + reason */}
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                  {statusBadge(req.type)}
+                  <span>
+                    {formatDate(req.fromDate)}
+                    {req.fromDate !== req.toDate && <> → {formatDate(req.toDate)}</>}
+                  </span>
+                  <span className="font-medium text-gray-800">
+                    {req.days} {t('common.day')}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {t('common.step')} {req.currentStep}/2
+                  </span>
+                </div>
+                {req.reason && (
+                  <p className="text-xs text-gray-500 truncate max-w-sm" title={req.reason}>
+                    💬 {req.reason}
+                  </p>
+                )}
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                 <Button
                   size="sm"
                   onClick={() => onApprove(req.id)}

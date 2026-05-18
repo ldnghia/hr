@@ -3,13 +3,11 @@
  *
  * Delegates to focused sub-services:
  *   - AttendanceExportDetailService  → exportReport (flat session list)
- *   - AttendanceExportGridService    → exportGridReport (employee × day matrix)
- *   - AttendanceExportSummaryService → exportSummaryReport (working-day totals)
+ *   - AttendanceExportCombinedService → exportCombinedReport (2-sheet: grid + summary)
  */
 import { Injectable } from '@nestjs/common';
 import { AttendanceExportDetailService } from './attendance-export-detail.service';
-import { AttendanceExportGridService } from './attendance-export-grid.service';
-import { AttendanceExportSummaryService } from './attendance-export-summary.service';
+import { AttendanceExportCombinedService } from './attendance-export-combined.service';
 import { ReportAttendanceDto } from './dto/report-attendance.dto';
 import { Response } from 'express';
 
@@ -17,19 +15,20 @@ import { Response } from 'express';
 export class AttendanceExportService {
   constructor(
     private readonly detailService: AttendanceExportDetailService,
-    private readonly gridService: AttendanceExportGridService,
-    private readonly summaryService: AttendanceExportSummaryService,
+    private readonly combinedService: AttendanceExportCombinedService,
   ) {}
 
   exportReport(dto: ReportAttendanceDto, user: { id: number; role: string }, res: Response) {
     return this.detailService.exportReport(dto, user, res);
   }
 
+  /** Export Ca cố định (FIXED): 2 sheets — grid + summary, employees with workingMode=FIXED */
   exportGridReport(dto: ReportAttendanceDto, user: { id: number; role: string }, res: Response) {
-    return this.gridService.exportGridReport(dto, user, res);
+    return this.combinedService.exportCombined(dto, 'FIXED', user, res);
   }
 
+  /** Export Command Center (SHIFT): 2 sheets — grid + summary, employees with workingMode=SHIFT */
   exportSummaryReport(dto: ReportAttendanceDto, user: { id: number; role: string }, res: Response) {
-    return this.summaryService.exportSummaryReport(dto, user, res);
+    return this.combinedService.exportCombined(dto, 'SHIFT', user, res);
   }
 }

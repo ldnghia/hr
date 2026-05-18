@@ -215,7 +215,7 @@ export class AttendanceController {
   }
 
   @Get('report/export-grid')
-  @Roles('admin')
+  @Roles('admin', 'hr', 'manager')
   @ApiOperation({ summary: 'Export attendance report to Excel (grid/matrix format)' })
   exportGridReport(
     @Query() dto: ReportAttendanceDto,
@@ -226,7 +226,7 @@ export class AttendanceController {
   }
 
   @Get('report/export-summary')
-  @Roles('admin')
+  @Roles('admin', 'hr', 'manager')
   @ApiOperation({ summary: 'Export summary working-day report to Excel' })
   exportSummaryReport(
     @Query() dto: ReportAttendanceDto,

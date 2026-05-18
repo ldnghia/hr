@@ -1,34 +1,81 @@
 'use client';
 
-import type { DayCell, ShiftEntry } from './admin-attendance-report-types';
+import type { DayCell, CellStatus, ShiftEntry } from './admin-attendance-report-types';
 import { STATUS_META } from './admin-attendance-report-types';
 
-// ─── Status-based colour tokens ───────────────────────────────────────────────
-// Cells colour by work-hours status, not by shift type.
+// ─── Colour tokens — same palette as the fixed-schedule grid ─────────────────
 
-/** Returns background + text colour based on whether the shift met its hour quota.
- *  For all statuses that have a checkout, colour is driven by hour sufficiency so
- *  the cell is green when hours are met (even if the employee was late/early).
- *  Late/early status is surfaced separately via badge flags, not cell colour. */
+const CELL_STYLE: Record<CellStatus, { bg: string; color: string }> = {
+  ok:      { bg: 'oklch(54% 0.16 152 / 0.13)', color: 'oklch(54% 0.16 152)' },
+  late:    { bg: 'oklch(58% 0.20 28  / 0.13)', color: 'oklch(58% 0.20 28)'  },
+  early:   { bg: 'oklch(54% 0.13 245 / 0.13)', color: 'oklch(54% 0.13 245)' },
+  annual:  { bg: 'oklch(60% 0.15 75  / 0.16)', color: 'oklch(60% 0.15 75)'  },
+  unpaid:  { bg: 'oklch(50% 0.10 60  / 0.14)', color: 'oklch(50% 0.10 60)'  },
+  special: { bg: 'oklch(54% 0.16 290 / 0.13)', color: 'oklch(54% 0.16 290)' },
+  holiday: { bg: 'oklch(56% 0.18 330 / 0.13)', color: 'oklch(56% 0.18 330)' },
+  ot:      { bg: 'oklch(60% 0.17 45  / 0.15)', color: 'oklch(60% 0.17 45)'  },
+  absent:  { bg: 'oklch(52% 0.22 18  / 0.13)', color: 'oklch(52% 0.22 18)'  },
+  off:     { bg: 'transparent',                 color: '#aab3c2'              },
+  future:  { bg: 'transparent',                 color: '#aab3c2'              },
+};
+
+const SUFFICIENT_BG    = 'oklch(54% 0.16 152 / 0.15)';
+const SUFFICIENT_COLOR = 'oklch(44% 0.16 152)';
+const INCOMPLETE_BG    = 'oklch(60% 0.15 75  / 0.18)';
+const INCOMPLETE_COLOR = 'oklch(46% 0.15 75)';
+
+/** Cell background/color — priority matches glyph: Đủ giờ → Đi trễ → Về sớm → Chưa checkout → status */
+function cellStyle(shift: ShiftEntry): { background: string; color: string } {
+  const { status, hasNoCheckout, workingHours, normalHours, checkinTime } = shift;
+  const isSufficient = !!checkinTime && !hasNoCheckout && (
+    (normalHours ?? 0) > 0
+      ? (workingHours ?? 0) >= (normalHours ?? 0)
+      : status === 'ok' || status === 'ot'
+  );
+  if (isSufficient)       return { background: SUFFICIENT_BG,           color: SUFFICIENT_COLOR           };
+  if (status === 'late')  return { background: CELL_STYLE.late.bg,       color: CELL_STYLE.late.color       };
+  if (status === 'early') return { background: CELL_STYLE.early.bg,      color: CELL_STYLE.early.color      };
+  if (hasNoCheckout)      return { background: INCOMPLETE_BG,            color: INCOMPLETE_COLOR            };
+  const cs = CELL_STYLE[status] ?? CELL_STYLE.ok;
+  return { background: cs.bg, color: cs.color };
+}
+
+/** Icon for a shift entry — priority: Đủ giờ → Đi trễ → Về sớm → Chưa checkout → Vắng */
+function cellGlyph(shift: ShiftEntry): React.ReactNode {
+  const { status, hasNoCheckout, workingHours, normalHours, checkinTime } = shift;
+  const isSufficient = !!checkinTime && !hasNoCheckout && (
+    (normalHours ?? 0) > 0
+      ? (workingHours ?? 0) >= (normalHours ?? 0)
+      : status === 'ok' || status === 'ot'
+  );
+  if (isSufficient)             return <span className="text-[15px] leading-none font-bold">✓</span>;
+  if (status === 'late')        return <span>!</span>;
+  if (status === 'early')       return <span className="text-[12px]">↩</span>;
+  if (hasNoCheckout)            return <span className="text-[12px] font-bold">?</span>;
+  if (status === 'absent')      return <span>✗</span>;
+  if (status === 'annual')      return <span>P</span>;
+  if (status === 'unpaid')      return <span>KL</span>;
+  if (status === 'special')     return <span>ĐB</span>;
+  if (status === 'holiday')     return <span>L</span>;
+  return <span style={{ opacity: 0.4 }}>·</span>;
+}
+
+/** Tooltip-only: colour shift row by hour sufficiency (kept for tooltip readability). */
 function shiftStatusStyle(shift: ShiftEntry): { background: string; color: string } {
   const { status, hasNoCheckout, workingHours, normalHours } = shift;
-
   if (status === 'absent')
     return { background: 'oklch(52% 0.22 18 / 0.15)', color: 'oklch(42% 0.22 18)' };
-
   if (hasNoCheckout)
     return { background: 'oklch(60% 0.15 75 / 0.20)', color: 'oklch(46% 0.15 75)' };
-
-  // All statuses with checkin+checkout: colour by hour sufficiency
   const sufficient = (normalHours ?? 0) > 0
     ? (workingHours ?? 0) >= (normalHours ?? 0)
     : status !== 'absent';
   return sufficient
-    ? { background: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(44% 0.16 152)' } // green
-    : { background: 'oklch(60% 0.15 75 / 0.18)',  color: 'oklch(46% 0.15 75)'  }; // amber
+    ? { background: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(44% 0.16 152)' }
+    : { background: 'oklch(60% 0.15 75 / 0.18)',  color: 'oklch(46% 0.15 75)'  };
 }
 
-// OT dot — distinguishes OT (bright green) from plain ok (same green bg)
+// OT dot — amber accent on green cell to signal overtime
 const OT_DOT = 'oklch(60% 0.17 45)';
 
 // ─── Tooltip ─────────────────────────────────────────────────────────────────
@@ -87,7 +134,7 @@ export function CcTooltip({ data }: { data: CcTooltipData }) {
         <p className="text-gray-400">Nghỉ</p>
       ) : (
         shifts.map((s, i) => (
-          <div key={i} className="mt-1.5 rounded-md px-2 py-1.5 space-y-0.5" style={shiftStatusStyle(s)}>
+          <div key={i} className="mt-1.5 rounded-md px-2 py-1.5 space-y-0.5" style={(() => { const st = cellStyle(s); return { background: st.background, color: st.color }; })()}>
             {/* shift header: code + name */}
             <div className="flex items-center gap-1.5">
               <span className="font-mono font-bold text-[11px]">{s.shiftCode}</span>
@@ -137,11 +184,6 @@ export function CcTooltip({ data }: { data: CcTooltipData }) {
                 Về sớm: <span className="font-semibold">-{s.earlyMinutes}p</span>
               </div>
             )}
-            {(s.otHours ?? 0) > 0 && (
-              <div className="text-[10px]" style={{ color: OT_DOT }}>
-                Tăng ca: <span className="font-semibold">+{s.otHours}h</span>
-              </div>
-            )}
             {s.correctionStatus === 'pending' && (
               <div className="text-[10px] font-semibold" style={{ color: 'oklch(55% 0.18 50)' }}>● Chờ duyệt chỉnh sửa</div>
             )}
@@ -161,13 +203,14 @@ export function CcTooltip({ data }: { data: CcTooltipData }) {
 // ─── Single shift badge (used in multi-shift stacked layout) ─────────────────
 
 function ShiftBadge({ shift, rounded }: { shift: ShiftEntry; rounded: string }) {
-  const isOt = shift.status === 'ot';
+  const style = cellStyle(shift);
+  const isOt  = shift.status === 'ot';
   return (
     <div
       className={`h-4 flex shrink-0 items-center justify-center font-mono text-[9px] font-bold relative ${rounded}`}
-      style={shiftStatusStyle(shift)}
+      style={{ background: style.background, color: style.color }}
     >
-      {shift.shiftCode}
+      {cellGlyph(shift)}
       {isOt && (
         <span className="absolute right-[1px] top-[1px] h-1 w-1 rounded-full"
           style={{ background: OT_DOT }} />
@@ -239,11 +282,10 @@ export function CcCell({ cell, dow, onMouseEnter, onMouseLeave }: CcCellProps) {
     );
   }
 
-  // Single shift — show shift code + status glyph
-  const s = shifts[0];
-  const isOt = s.status === 'ot';
-  const isSufficient = !s.hasNoCheckout && (s.normalHours ?? 0) > 0 && (s.workingHours ?? 0) >= (s.normalHours ?? 0);
-  const glyph = isSufficient ? '✓' : s.shiftCode;
+  // Single shift — same icon set as fixed-schedule grid, no S/C/D codes
+  const s     = shifts[0];
+  const style = cellStyle(s);
+  const isOt  = s.status === 'ot';
 
   return (
     <td
@@ -253,13 +295,10 @@ export function CcCell({ cell, dow, onMouseEnter, onMouseLeave }: CcCellProps) {
       onMouseLeave={onMouseLeave}
     >
       <div
-        className="relative flex h-[34px] w-full items-center justify-center gap-1 rounded-[5px] font-mono text-[11px] font-bold"
-        style={shiftStatusStyle(s)}
+        className="relative flex h-[34px] w-full items-center justify-center rounded-[5px] font-mono text-[11px] font-bold"
+        style={{ background: style.background, color: style.color }}
       >
-        <span>{glyph}</span>
-        {s.shiftCode !== '?' && glyph === '✓' && (
-          <span className="text-[9px] opacity-60">{s.shiftCode}</span>
-        )}
+        {cellGlyph(s)}
         {isOt && (
           <span className="absolute right-[2px] top-[2px] h-1.5 w-1.5 rounded-full shadow-[0_0_0_1px_white]"
             style={{ background: OT_DOT }} />

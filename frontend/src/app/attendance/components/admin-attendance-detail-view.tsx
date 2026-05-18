@@ -341,7 +341,7 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
               color="oklch(52% 0.22 18)" />
           </div>
         ) : (
-          /* SHIFT (CC): keep original 10-card layout */
+          /* SHIFT (CC): 9-card layout — row1: Tổng số ca | Ca đủ giờ | Đúng giờ | Ca thiếu giờ | Đi trễ  row2: Về sớm | Phép năm | Nghỉ ĐB | Vắng mặt */
           <div className="grid grid-cols-5 divide-x divide-y divide-gray-100 [&>*]:border-gray-100">
             <StatCard label="Tổng số ca" value={totalShifts}
               sub={`${attended} ngày có mặt`} color="oklch(54% 0.16 152)"
@@ -349,6 +349,9 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
             <StatCard label="Ca đủ giờ" value={suffDays}
               sub={`${row.okDays} đúng giờ + ${row.otDays} OT`} color="oklch(44% 0.16 152)"
               pct={scheduledCells.length ? suffDays / scheduledCells.length * 100 : 0} />
+            <StatCard label="Đúng giờ" value={row.okDays}
+              sub="không trễ, đủ giờ" color="oklch(54% 0.16 152)"
+              pct={scheduledCells.length ? row.okDays / scheduledCells.length * 100 : 0} />
             <StatCard label="Ca thiếu giờ" value={insuffShifts}
               sub={insuffShifts > 0 ? 'ca chưa đủ giờ quy định' : 'không có'}
               color="oklch(48% 0.15 75)" />
@@ -358,8 +361,6 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
             <StatCard label="Về sớm" value={earlyDays}
               sub={`${totalEarlyMin} phút tổng`} color="oklch(54% 0.13 245)"
               pct={scheduledCells.length ? earlyDays / scheduledCells.length * 100 : 0} />
-            <StatCard label="Tăng ca" value={`${row.totalOtHours}h`}
-              sub={`${row.otDays} ca có OT`} color="oklch(60% 0.17 45)" />
             <StatCard label="Phép năm" value={row.annualDays}
               sub="ngày có lương" color="oklch(60% 0.15 75)" />
             <StatCard label="Nghỉ ĐB" value={specialDays}
@@ -367,9 +368,6 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
             <StatCard label="Vắng mặt" value={row.absentDays}
               sub={row.absentDays > 0 ? 'không phép' : 'không có'}
               color="oklch(52% 0.22 18)" />
-            <StatCard label="Đúng giờ" value={row.okDays}
-              sub="không trễ, đủ giờ" color="oklch(54% 0.16 152)"
-              pct={scheduledCells.length ? row.okDays / scheduledCells.length * 100 : 0} />
           </div>
         )}
       </div>

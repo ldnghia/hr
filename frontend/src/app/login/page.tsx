@@ -72,12 +72,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-white px-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-white px-4">
+      {/* Language switcher — fixed top-right */}
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
+
       <div className="w-full max-w-md">
-        {/* Language switcher */}
-        <div className="mb-4 flex justify-end">
-          <LanguageSwitcher />
-        </div>
 
         {/* Loading */}
         {loading && (
@@ -160,35 +161,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo accounts */}
-          <div className="mt-6 border-t border-gray-100 pt-5">
-            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">
-              Demo accounts
-            </p>
-
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'Admin', email: 'admin@company.com' },
-                { label: 'HR', email: 'hr@company.com' },
-                { label: 'Manager', email: 'manager@company.com' },
-                { label: 'Employee', email: 'employee@company.com' },
-              ].map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(acc.email);
-                    setPassword('password123');
-                  }}
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 text-left"
-                >
-                  <span className="font-semibold">{acc.label}</span>
-                  <br />
-                  <span className="text-gray-400 truncate block">{acc.email}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>

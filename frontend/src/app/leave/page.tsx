@@ -488,6 +488,7 @@ export default function LeavePage() {
                     <tr>
                       {isAdminOrHR && <th className="px-6 py-3 text-left">{t('leave.colEmployee')}</th>}
                       <th className="px-6 py-3 text-left">{t('leave.colType')}</th>
+                      <th className="px-6 py-3 text-left">Lý do</th>
                       <th className="px-6 py-3 text-left">{t('leave.colDateRange')}</th>
                       <th className="px-6 py-3 text-left">{t('leave.colDays')}</th>
                       <th className="px-6 py-3 text-left">{t('leave.colStatus')}</th>
@@ -509,6 +510,9 @@ export default function LeavePage() {
                           </td>
                         )}
                         <td className="px-6 py-3">{statusBadge(leave.type)}</td>
+                        <td className="px-6 py-3 text-gray-600 max-w-[200px]">
+                          <p className="truncate text-sm" title={leave.reason}>{leave.reason || <span className="text-gray-300">—</span>}</p>
+                        </td>
                         <td className="px-6 py-3 text-gray-600 whitespace-nowrap">
                           {formatDate(leave.fromDate)}
                           {leave.fromDate !== leave.toDate && (
@@ -543,7 +547,7 @@ export default function LeavePage() {
                     ))}
                     {result?.data.length === 0 && (
                       <tr>
-                        <td colSpan={isAdminOrHR ? 7 : 6} className="px-6 py-12 text-center text-sm text-gray-400">
+                        <td colSpan={isAdminOrHR ? 8 : 7} className="px-6 py-12 text-center text-sm text-gray-400">
                           {t('leave.noRequests')}
                         </td>
                       </tr>

@@ -106,6 +106,7 @@ export interface MonthlySummary {
   totalEmployees: number;
   attendanceRate: number;
   lateTotalEvents: number;
+  earlyTotal: number;
   absentTotal: number;
   otTotalHours: number;
   annualTotal: number;

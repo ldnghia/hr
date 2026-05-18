@@ -7,6 +7,7 @@ import { AttendanceExportService } from './attendance-export.service';
 import { AttendanceExportDetailService } from './attendance-export-detail.service';
 import { AttendanceExportGridService } from './attendance-export-grid.service';
 import { AttendanceExportSummaryService } from './attendance-export-summary.service';
+import { AttendanceExportCombinedService } from './attendance-export-combined.service';
 import { AttendanceProcessorService } from './attendance-processor.service';
 import { AttendanceController } from './attendance.controller';
 import { ShiftService } from './shift.service';
@@ -25,6 +26,7 @@ import { CalendarModule } from '../calendar/calendar.module';
     AttendanceExportDetailService,
     AttendanceExportGridService,
     AttendanceExportSummaryService,
+    AttendanceExportCombinedService,
     AttendanceProcessorService,
     ShiftService,
     ShiftResolverService,

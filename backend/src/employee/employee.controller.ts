@@ -42,8 +42,12 @@ export class EmployeeController {
 
   @Get()
   @ApiOperation({ summary: 'List all employees with filters & pagination' })
-  findAll(@Query() dto: ListEmployeeDto) {
-    return this.employeeService.findAll(dto);
+  findAll(
+    @Query() dto: ListEmployeeDto,
+    @CurrentUser('id') userId: number,
+    @CurrentUser('role') userRole: string,
+  ) {
+    return this.employeeService.findAll(dto, userId, userRole);
   }
 
   @Get(':id')

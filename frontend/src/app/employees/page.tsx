@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { employeeService } from '@/services/employee.service';
+import { organizationService } from '@/services/organization.service';
 import { usePagination } from '@/hooks/usePagination';
 import { useAuth } from '@/hooks/useAuth';
 import { isAdminOrHR } from '@/utils/rbac';
 import { EmployeeTable } from '@/modules/employee/EmployeeTable';
 import { CreateEmployeeModal } from '@/modules/employee/CreateEmployeeModal';
 import { useTranslation } from 'react-i18next';
-import type { Employee, PaginatedResponse } from '@/types';
+import type { Employee, Department, PaginatedResponse } from '@/types';
 
 export default function EmployeesPage() {
   const { user } = useAuth();
@@ -34,9 +35,16 @@ export default function EmployeesPage() {
   const [result, setResult] = useState<PaginatedResponse<Employee> | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [departmentId, setDepartmentId] = useState<number | ''>('');
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const { page, limit, goTo, next, prev, reset } = usePagination(20);
+
+  // Load department list once for filter dropdown
+  useEffect(() => {
+    organizationService.departments().then(setDepartments).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -49,14 +57,14 @@ export default function EmployeesPage() {
         limit,
         search: search || undefined,
         status: statusFilter || undefined,
-        // Manager: restrict to direct reports
-        managerId: isManager ? user.id : undefined,
+        departmentId: departmentId || undefined,
+        // Manager scoping is handled server-side (auto dept filter)
       });
       setResult(data);
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, statusFilter, user, role, isManager]);
+  }, [page, limit, search, statusFilter, departmentId, user, role, isManager]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -107,11 +115,27 @@ export default function EmployeesPage() {
                 <option value="inactive">{t('status.inactive')}</option>
               </select>
             </div>
+            {/* Department filter — only for admin/hr (manager already scoped to team) */}
+            {canSeeAll && departments.length > 0 && (
+              <div className="space-y-1">
+                <label className="block text-sm font-medium text-gray-700">{t('employee.colDepartment')}</label>
+                <select
+                  value={departmentId}
+                  onChange={(e) => { setDepartmentId(e.target.value ? Number(e.target.value) : ''); reset(); }}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">{t('common.all')}</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <Button type="submit" variant="secondary">{t('common.search')}</Button>
             <Button
               type="button"
               variant="ghost"
-              onClick={() => { setSearch(''); setStatusFilter(''); reset(); }}
+              onClick={() => { setSearch(''); setStatusFilter(''); setDepartmentId(''); reset(); }}
             >
               {t('common.clear')}
             </Button>

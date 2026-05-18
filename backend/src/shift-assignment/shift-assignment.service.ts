@@ -22,14 +22,12 @@ export class ShiftAssignmentService {
     filters: { departmentId?: number; branchId?: number },
   ) {
     const where: Record<string, unknown> = {
-      status: { not: 'resigned' },
+      status: { notIn: ['resigned', 'inactive'] },
       ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
       ...(filters.branchId ? { branchId: filters.branchId } : {}),
     };
 
-    if (requesterRole === 'manager') {
-      where.managerId = requesterId;
-    }
+    // manager: dept scoping handled in getMonthMatrix, no extra restriction here
 
     return where;
   }
@@ -43,7 +41,18 @@ export class ShiftAssignmentService {
     requesterId: number,
     requesterRole: string,
   ) {
-    const employeeWhere = this.buildEmployeeScope(requesterId, requesterRole, filters);
+    // For managers: auto-scope to their own department (includes themselves)
+    let effectiveFilters = { ...filters };
+    if (requesterRole === 'manager' && !filters.departmentId && !filters.branchId) {
+      const mgr = await this.prisma.employee.findUnique({
+        where: { id: requesterId },
+        select: { departmentId: true, branchId: true },
+      });
+      if (mgr?.departmentId) effectiveFilters.departmentId = mgr.departmentId;
+      else if (mgr?.branchId) effectiveFilters.branchId = mgr.branchId;
+    }
+
+    const employeeWhere = this.buildEmployeeScope(requesterId, requesterRole, effectiveFilters);
 
     const [employees, shifts] = await Promise.all([
       this.prisma.employee.findMany({
@@ -133,7 +142,7 @@ export class ShiftAssignmentService {
     const [employees, deptShifts, fixedShift] = await Promise.all([
       this.prisma.employee.findMany({
         where: {
-          status: { not: 'resigned' },
+          status: { notIn: ['resigned', 'inactive'] },
           ...(departmentId ? { departmentId } : {}),
         },
         select: { id: true, shiftId: true, departmentId: true, workingMode: true },
@@ -337,7 +346,7 @@ export class ShiftAssignmentService {
     // 2. All non-resigned employees in the affected departments
     const employees = await this.prisma.employee.findMany({
       where: {
-        status: { not: 'resigned' },
+        status: { notIn: ['resigned', 'inactive'] },
         departmentId: { in: [...deptToShift.keys()] },
       },
       select: { id: true, departmentId: true },
@@ -381,7 +390,7 @@ export class ShiftAssignmentService {
       where: deleteWhere,
     });
 
-    const empWhere: Record<string, unknown> = { status: { not: 'resigned' } };
+    const empWhere: Record<string, unknown> = { status: { notIn: ['resigned', 'inactive'] } };
     if (employeeId) empWhere.id = employeeId;
 
     const [employees, deptShifts, fixedShift] = await Promise.all([

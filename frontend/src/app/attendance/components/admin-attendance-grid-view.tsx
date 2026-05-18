@@ -149,27 +149,35 @@ function Cell({ cell, onMouseEnter, onMouseLeave }: {
   onMouseEnter: (e: React.MouseEvent, c: DayCell) => void;
   onMouseLeave: () => void;
 }) {
-  const cs = CELL_STYLE[cell.status];
+  const cs  = CELL_STYLE[cell.status];
   const isSun = cell.dow === 0 || cell.dow === 6;
 
-  // Determine visual variant — prioritise "sufficient hours" even if late
-  const hasAttended = !!cell.checkinTime;
+  const hasAttended  = !!cell.checkinTime;
   const isSufficient = hasAttended && !cell.hasNoCheckout &&
     ((cell.normalHours ?? 0) > 0 ? (cell.workingHours ?? 0) >= (cell.normalHours ?? 0) : cell.status === 'ok' || cell.status === 'ot');
-  const isIncomplete = cell.hasNoCheckout || (!isSufficient && cell.status === 'early');
 
-  const bg    = isSufficient ? SUFFICIENT_BG    : isIncomplete ? INCOMPLETE_BG    : cs.bg;
-  const color = isSufficient ? SUFFICIENT_COLOR : isIncomplete ? INCOMPLETE_COLOR : cs.color;
+  // Colour priority matches glyph priority: Đủ giờ → Đi trễ → Về sớm → Chưa checkout → status
+  const bg = isSufficient             ? SUFFICIENT_BG
+    : cell.status === 'late'          ? CELL_STYLE.late.bg
+    : cell.status === 'early'         ? CELL_STYLE.early.bg
+    : cell.hasNoCheckout              ? INCOMPLETE_BG
+    : cs.bg;
+  const color = isSufficient          ? SUFFICIENT_COLOR
+    : cell.status === 'late'          ? CELL_STYLE.late.color
+    : cell.status === 'early'         ? CELL_STYLE.early.color
+    : cell.hasNoCheckout              ? INCOMPLETE_COLOR
+    : cs.color;
 
+  // Priority: Đủ giờ → Đi trễ → Về sớm → Chưa checkout → Vắng
   let glyph: React.ReactNode;
   if (isSufficient) {
     glyph = <span className="text-[15px] leading-none font-bold">✓</span>;
-  } else if (cell.hasNoCheckout) {
-    glyph = <span className="text-[12px] font-bold">?</span>;
-  } else if (cell.status === 'early') {
-    glyph = <span className="text-[12px]">↩</span>;
   } else if (cell.status === 'late') {
     glyph = <span>!</span>;
+  } else if (cell.status === 'early') {
+    glyph = <span className="text-[12px]">↩</span>;
+  } else if (cell.hasNoCheckout) {
+    glyph = <span className="text-[12px] font-bold">?</span>;
   } else if (cell.status === 'absent') {
     glyph = <span>✗</span>;
   } else if (cell.status === 'annual') {

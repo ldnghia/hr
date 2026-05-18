@@ -144,8 +144,7 @@ export function CreateEmployeeModal({
     if (!form.branchId) errs.branchId = t('validation.branchRequired');
     if (!form.departmentId) errs.departmentId = t('validation.departmentRequired');
     if (!form.positionId) errs.positionId = t('validation.positionRequired');
-    const selectedDept = departments.find((d) => String(d.id) === form.departmentId);
-    if (selectedDept?.workingType === 'SHIFT' && !form.shiftId) errs.shiftId = t('validation.shiftRequired');
+    // shiftId is optional — assigned later via shift-assignment
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }

@@ -77,19 +77,17 @@ export class EmployeeService {
           `Department "${dept.name}" uses SHIFT working type — employee workingMode must be "SHIFT".`,
         );
       }
-      if (!shiftId) {
-        throw new BadRequestException(
-          `Department "${dept.name}" uses SHIFT working type — a shiftId is required.`,
-        );
-      }
-      // Validate the shift belongs to this department
-      const shift = await this.prisma.shift.findFirst({
-        where: { id: shiftId, departmentId: dept.id },
-      });
-      if (!shift) {
-        throw new BadRequestException(
-          `Shift ${shiftId} does not belong to department "${dept.name}".`,
-        );
+      // shiftId is optional — can be assigned later via shift-assignment
+      if (shiftId) {
+        // Validate the shift belongs to this department when provided
+        const shift = await this.prisma.shift.findFirst({
+          where: { id: shiftId, departmentId: dept.id },
+        });
+        if (!shift) {
+          throw new BadRequestException(
+            `Shift ${shiftId} does not belong to department "${dept.name}".`,
+          );
+        }
       }
     } else {
       // FIXED department
@@ -187,7 +185,7 @@ export class EmployeeService {
 
   // ─── Find all / one ───────────────────────────────────────────────────────
 
-  async findAll(dto: ListEmployeeDto) {
+  async findAll(dto: ListEmployeeDto, requesterId?: number, requesterRole?: string) {
     const { page = 1, limit = 20, search, status, role, branchId, departmentId, managerId } = dto;
     const { skip, take } = paginate(page, limit);
 
@@ -205,6 +203,15 @@ export class EmployeeService {
     if (branchId)     where.branchId     = branchId;
     if (departmentId) where.departmentId = departmentId;
     if (managerId)    where.managerId    = managerId;
+
+    // Manager: auto-scope to their own department when no explicit dept/manager filter
+    if (requesterRole === 'manager' && requesterId && !departmentId && !managerId) {
+      const mgr = await this.prisma.employee.findUnique({
+        where: { id: requesterId },
+        select: { departmentId: true },
+      });
+      if (mgr?.departmentId) where.departmentId = mgr.departmentId;
+    }
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.employee.findMany({ where, select: EMPLOYEE_SELECT, skip, take, orderBy: { createdAt: 'desc' } }),

@@ -318,7 +318,11 @@ export class AttendanceQueryService {
 
   // ─── Report (with RBAC + filters) ────────────────────────────────────────
 
-  async getReport(dto: ReportAttendanceDto, user: { id: number; role: string }) {
+  async getReport(
+    dto: ReportAttendanceDto,
+    user: { id: number; role: string },
+    workingMode?: 'FIXED' | 'SHIFT',
+  ) {
     const {
       page = 1,
       limit = 20,
@@ -348,6 +352,7 @@ export class AttendanceQueryService {
 
     if (employeeId) where.AND.push({ employeeId });
     if (departmentId) where.AND.push({ employee: { departmentId } });
+    if (workingMode) where.AND.push({ employee: { workingMode } });
 
     if (dateFrom || dateTo) {
       const dateFilter: any = {};

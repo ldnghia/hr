@@ -71,7 +71,7 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
-  const port = parseInt(process.env.PORT ?? '3001', 10);
+  const port = parseInt(process.env.PORT ?? '3000', 10);
   const lanIP = getLanIP();
   await app.listen(port, '0.0.0.0');
 

@@ -51,19 +51,29 @@ function buildCoverage(rows: EmployeeRow[], daysInMonth: number): Record<ShiftLe
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
+const WORKED: readonly string[] = ['ok', 'late', 'early', 'ot'];
+
 interface Props {
   rows: EmployeeRow[];
   year: number;
   month: number;
   todayDay: number;
   onSelectEmployee: (empId: number) => void;
+  /** Per-day schedule entries — used to compute "Số ca đã phân" per employee */
+  shiftSchedules?: { employeeId: number }[];
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AdminAttendanceCcGridView({ rows, year, month, todayDay, onSelectEmployee }: Props) {
+export function AdminAttendanceCcGridView({ rows, year, month, todayDay, onSelectEmployee, shiftSchedules = [] }: Props) {
   const [tooltip, setTooltip] = useState<CcTooltipData | null>(null);
   const daysInMonth = new Date(year, month, 0).getDate();
+
+  // Build employeeId → scheduled shift count map
+  const scheduledMap = new Map<number, number>();
+  for (const s of shiftSchedules) {
+    scheduledMap.set(s.employeeId, (scheduledMap.get(s.employeeId) ?? 0) + 1);
+  }
 
   const days = Array.from({ length: daysInMonth }, (_, i) => {
     const d = i + 1;
@@ -103,14 +113,21 @@ export function AdminAttendanceCcGridView({ rows, year, month, todayDay, onSelec
                 </th>
               ))}
               {/* Summary cols */}
-              <th className="sticky right-[72px] z-[6] min-w-[72px] border-b border-l border-gray-200 bg-gray-50 px-1.5 text-center text-[10px] font-semibold uppercase tracking-widest text-gray-400">Ca</th>
-              <th className="sticky right-0      z-[6] min-w-[72px] border-b border-l border-gray-200 bg-gray-50 px-1.5 text-center text-[10px] font-semibold uppercase tracking-widest text-gray-400">Ngày công</th>
+              <th className="sticky right-[72px] z-[6] min-w-[72px] border-b border-l border-gray-200 bg-gray-50 px-1.5 text-center text-[10px] font-semibold uppercase tracking-widest text-gray-400">Ca đã phân</th>
+              <th className="sticky right-0     z-[6] min-w-[72px] border-b border-l border-gray-200 bg-gray-50 px-1.5 text-center text-[10px] font-semibold uppercase tracking-widest text-gray-400">Ca đã làm</th>
             </tr>
           </thead>
 
           <tbody>
             {rows.map((row) => {
-              const totalShifts = row.cells.reduce((s, c) => s + (c.shifts?.length ?? 0), 0);
+              // Số ca đã phân: from shift schedule data
+              const scheduled = scheduledMap.get(row.id) ?? 0;
+              // Số ca đã làm: shifts with attendance records that are worked statuses
+              const worked = row.cells.reduce((s, c) => {
+                if (c.shifts && c.shifts.length > 0)
+                  return s + c.shifts.filter(sh => WORKED.includes(sh.status)).length;
+                return s;
+              }, 0);
               const suffDays = row.okDays + row.otDays;
 
               return (
@@ -138,14 +155,15 @@ export function AdminAttendanceCcGridView({ rows, year, month, todayDay, onSelec
                       onMouseLeave={() => setTooltip(null)}
                     />
                   ))}
-                  {/* Summary cols */}
-                  <td className="sticky right-[72px] border-b border-l border-gray-200 bg-white px-1.5 text-center font-mono text-[11.5px] font-semibold"
-                    style={{ color: totalShifts > 0 ? 'oklch(44% 0.13 245)' : '#aab3c2' }}>
-                    {totalShifts > 0 ? totalShifts : '—'}
+                  {/* Ca đã phân */}
+                  <td className="sticky right-[72px] border-b border-l border-gray-200 bg-white px-1.5 text-center font-mono text-[13px] font-semibold"
+                    style={{ color: scheduled > 0 ? 'oklch(44% 0.13 245)' : '#aab3c2' }}>
+                    {scheduled > 0 ? scheduled : '—'}
                   </td>
-                  <td className="sticky right-0 border-b border-l border-gray-200 bg-white px-1.5 text-center font-mono text-[13px] font-bold"
-                    style={{ color: suffDays > 0 ? 'oklch(44% 0.16 152)' : '#aab3c2' }}>
-                    {suffDays > 0 ? suffDays : '—'}
+                  {/* Ca đã làm */}
+                  <td className="sticky right-0 border-b border-l border-gray-200 bg-white px-1.5 text-center font-mono text-[13px] font-semibold"
+                    style={{ color: worked > 0 ? 'oklch(44% 0.16 152)' : '#aab3c2' }}>
+                    {worked > 0 ? worked : '—'}
                   </td>
                 </tr>
               );

@@ -6,12 +6,13 @@ import { attendanceService } from '@/services/attendance.service';
 import { employeeService } from '@/services/employee.service';
 import { organizationService } from '@/services/organization.service';
 import { correctionService } from '@/services/attendance-correction.service';
+import { shiftScheduleService } from '@/services/shift-schedule.service';
 import { PageSpinner } from '@/components/ui/Spinner';
 import type { Employee, Department, AttendanceRecord } from '@/types';
 import {
   type EmployeeRow, type DayCell, type CellStatus, type MonthlySummary,
   type ShiftEntry, type CorrectionStatus,
-  VN_HOLIDAYS, deriveCellStatus, deriveShiftCode, isoDateStr,
+  VN_HOLIDAYS, deriveCellStatus, deriveShiftCode, isoDateStr, countWorkingDays,
 } from './admin-attendance-report-types';
 import { AdminAttendanceKpiStrip } from './admin-attendance-kpi-strip';
 import { AdminAttendanceGridView } from './admin-attendance-grid-view';
@@ -213,21 +214,55 @@ function buildEmployeeRows(
   });
 }
 
-function computeSummary(rows: EmployeeRow[]): MonthlySummary {
-  let okShifts = 0; let scheduledShifts = 0;
-  let lateTotalEvents = 0; let absentTotal = 0; let otTotalHours = 0; let annualTotal = 0;
+/** Statuses that count as a completed shift/day */
+const WORKED_STATUSES: CellStatus[] = ['ok', 'late', 'early', 'ot'];
+
+function computeSummary(
+  rows: EmployeeRow[],
+  allSchedules: { employeeId: number }[],
+  workingMode: 'FIXED' | 'SHIFT' | undefined,
+  year: number,
+  month: number,
+): MonthlySummary {
+  let okShifts = 0;
+  let lateTotalEvents = 0; let earlyTotal = 0; let absentTotal = 0; let otTotalHours = 0; let annualTotal = 0;
 
   for (const r of rows) {
-    okShifts      += r.okDays + r.lateDays + r.cells.filter(c => c.status === 'early').length + r.otDays;
-    scheduledShifts += r.cells.filter(c => !['off','holiday','future'].includes(c.status)).length;
+    // Count each individual shift completion:
+    // - SHIFT employees may have multiple shifts per day → use cell.shifts[]
+    // - FIXED employees have at most 1 shift per day → use cell.status
+    // This avoids double-counting days that have both okDays + otDays incremented.
+    for (const cell of r.cells) {
+      if (cell.shifts && cell.shifts.length > 0) {
+        okShifts   += cell.shifts.filter(s => WORKED_STATUSES.includes(s.status)).length;
+        earlyTotal += cell.shifts.filter(s => s.status === 'early').length;
+      } else {
+        if (WORKED_STATUSES.includes(cell.status)) okShifts++;
+        if (cell.status === 'early') earlyTotal++;
+      }
+    }
     lateTotalEvents += r.lateDays;
-    absentTotal   += r.absentDays;
-    otTotalHours  += r.totalOtHours;
-    annualTotal   += r.annualDays;
+    absentTotal     += r.absentDays;
+    otTotalHours    += r.totalOtHours;
+    annualTotal     += r.annualDays;
   }
 
-  const attendanceRate = scheduledShifts > 0 ? okShifts / scheduledShifts * 100 : 0;
-  return { totalEmployees: rows.length, attendanceRate, lateTotalEvents, absentTotal, otTotalHours, annualTotal, okShifts, scheduledShifts };
+  let scheduledShifts: number;
+  let attendanceRate: number;
+
+  if (workingMode === 'SHIFT') {
+    // SHIFT: total per-day schedule records returned by the API.
+    // The API is already scoped by departmentId (manager) or all (admin),
+    // so the raw count is the correct "Số ca đã phân" for this scope.
+    scheduledShifts = allSchedules.length;
+    attendanceRate = scheduledShifts > 0 ? okShifts / scheduledShifts * 100 : 0;
+  } else {
+    // FIXED: scheduled = employees × standard working days in the month
+    scheduledShifts = rows.length * countWorkingDays(year, month);
+    attendanceRate = scheduledShifts > 0 ? okShifts / scheduledShifts * 100 : 0;
+  }
+
+  return { totalEmployees: rows.length, attendanceRate, lateTotalEvents, earlyTotal, absentTotal, otTotalHours, annualTotal, okShifts, scheduledShifts };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -248,11 +283,13 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
   const [year, setYear]   = useState(TODAY.getFullYear());
   const [month, setMonth] = useState(TODAY.getMonth() + 1);
 
-  const [employees, setEmployees]     = useState<Employee[]>([]);
-  const [records, setRecords]         = useState<AttendanceRecord[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [corrMap, setCorrMap]         = useState<Map<number, CorrectionStatus>>(new Map());
-  const [loading, setLoading]         = useState(false);
+  const [employees, setEmployees]         = useState<Employee[]>([]);
+  const [records, setRecords]             = useState<AttendanceRecord[]>([]);
+  const [departments, setDepartments]     = useState<Department[]>([]);
+  const [corrMap, setCorrMap]             = useState<Map<number, CorrectionStatus>>(new Map());
+  // Full per-day schedule array — filtered to match filteredRows when computing summary
+  const [shiftSchedules, setShiftSchedules] = useState<{ employeeId: number }[]>([]);
+  const [loading, setLoading]             = useState(false);
 
   // Resolved access scope: dept for manager, own id for employee
   const [scopeReady,  setScopeReady]  = useState(false);
@@ -262,9 +299,9 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
   // Filters
   const [search, setSearch]     = useState('');
   const [deptFilter, setDeptFilter] = useState('');
-  const [chipLate, setChipLate]     = useState(false);
-  const [chipAbsent, setChipAbsent] = useState(false);
-  const [chipOT, setChipOT]         = useState(false);
+  const [chipLate,   setChipLate]   = useState(false);
+  const [chipEarly,  setChipEarly]  = useState(false);
+  const [chipAnnual, setChipAnnual] = useState(false);
 
   // Views
   const [detailEmpId, setDetailEmpId] = useState<number | null>(null);
@@ -302,7 +339,7 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
             ...(scopeDeptId ? { departmentId: scopeDeptId } : {}),
           });
 
-      const [empRes, recRes, deptRes, corrRes] = await Promise.allSettled([
+      const [empRes, recRes, deptRes, corrRes, shiftRes] = await Promise.allSettled([
         empPromise,
         attendanceService.report({
           dateFrom, dateTo, limit: 2000, page: 1,
@@ -311,6 +348,10 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
         }),
         organizationService.departments(),
         correctionService.list({ limit: 500 }),
+        // Only SHIFT (Command Center) needs per-day schedule count for "Số ca đã phân"
+        workingMode === 'SHIFT'
+          ? shiftScheduleService.list({ year, month, ...(scopeDeptId ? { departmentId: scopeDeptId } : {}) })
+          : Promise.resolve([]),
       ]);
 
       if (empRes.status === 'fulfilled') {
@@ -320,7 +361,11 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
       if (recRes.status === 'fulfilled') setRecords(recRes.value.data ?? []);
       if (deptRes.status === 'fulfilled') setDepartments(deptRes.value ?? []);
       if (corrRes.status === 'fulfilled') {
-        const corrections = corrRes.value?.data ?? corrRes.value ?? [];
+        const rawCorr = corrRes.value;
+        // Guard: backend may return plain array OR paginated { data: [...] }
+        const corrections: { status: string; attendanceId: number }[] = Array.isArray(rawCorr)
+          ? rawCorr
+          : Array.isArray(rawCorr?.data) ? rawCorr.data : [];
         const map = new Map<number, CorrectionStatus>();
         for (const c of corrections) {
           if (c.status === 'cancelled') continue;
@@ -329,6 +374,16 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
           }
         }
         setCorrMap(map);
+      }
+      if (shiftRes.status === 'fulfilled') {
+        // Guard: backend returns plain array for this endpoint
+        const raw = shiftRes.value;
+        const arr: { employeeId: number }[] = Array.isArray(raw)
+          ? (raw as { employeeId: number }[])
+          : Array.isArray((raw as { data?: unknown }).data)
+            ? ((raw as { data: { employeeId: number }[] }).data)
+            : [];
+        setShiftSchedules(arr);
       }
     } finally {
       setLoading(false);
@@ -350,13 +405,16 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
       if (q && !row.fullName.toLowerCase().includes(q) && !row.code.toLowerCase().includes(q)) return false;
       if (deptFilter && String(row.deptId) !== deptFilter) return false;
       if (chipLate   && row.lateDays  === 0) return false;
-      if (chipAbsent && row.absentDays === 0) return false;
-      if (chipOT     && row.otDays    === 0) return false;
+      if (chipEarly  && row.cells.filter(c => c.status === 'early').length === 0) return false;
+      if (chipAnnual && row.annualDays === 0) return false;
       return true;
     });
-  }, [allRows, search, deptFilter, chipLate, chipAbsent, chipOT]);
+  }, [allRows, search, deptFilter, chipLate, chipEarly, chipAnnual]);
 
-  const summary = useMemo(() => computeSummary(filteredRows), [filteredRows]);
+  const summary = useMemo(
+    () => computeSummary(filteredRows, shiftSchedules, workingMode, year, month),
+    [filteredRows, shiftSchedules, workingMode, year, month],
+  );
 
   const detailRow = useMemo(
     () => allRows.find(r => r.id === detailEmpId) ?? null,
@@ -391,7 +449,7 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
   const legendItems = [
     { icon: '✓', bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(44% 0.16 152)', label: 'Đủ giờ'         },
     { icon: '!', bg: 'oklch(58% 0.20 28  / 0.13)', color: 'oklch(58% 0.20 28)',  label: 'Đi trễ'         },
-    { icon: '↩', bg: 'oklch(60% 0.15 75  / 0.18)', color: 'oklch(48% 0.15 75)',  label: 'Về sớm'         },
+    { icon: '↩', bg: 'oklch(54% 0.13 245 / 0.13)', color: 'oklch(54% 0.13 245)', label: 'Về sớm'         },
     { icon: '?', bg: 'oklch(60% 0.15 75  / 0.18)', color: 'oklch(48% 0.15 75)',  label: 'Chưa checkout'  },
     { icon: 'P', bg: 'oklch(60% 0.15 75  / 0.16)', color: 'oklch(60% 0.15 75)',  label: 'Phép'           },
     { icon: 'L', bg: 'oklch(56% 0.18 330 / 0.13)', color: 'oklch(56% 0.18 330)', label: 'Lễ'             },
@@ -404,60 +462,73 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
 
       {/* Top bar */}
-      <div className="flex items-center gap-4 border-b border-gray-100 bg-white px-6 py-3.5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white"
+      <div className="flex items-center gap-3 border-b border-gray-100 bg-white px-5 py-3">
+        {/* Title */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
             style={{ background: 'linear-gradient(140deg, oklch(55% 0.13 200), oklch(46% 0.13 200))' }}>
             CC
           </div>
-          <div>
-            <p className="text-[15px] font-bold leading-tight tracking-tight text-gray-900">{title ?? 'Báo cáo chấm công'}</p>
-            <p className="text-[12px] text-gray-400">Bảng tổng hợp theo tháng</p>
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-bold leading-tight tracking-tight text-gray-900">{title ?? 'Báo cáo chấm công'}</p>
+            <p className="text-[11px] text-gray-400">Bảng tổng hợp theo tháng</p>
           </div>
         </div>
 
-        <div className="flex-1" />
+        {/* Right controls — all in one non-wrapping group */}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Month pager + Today */}
+          <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+            <button onClick={() => changeMonth(-1)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-200">
+              ‹
+            </button>
+            <span className="min-w-[110px] px-2 text-center text-[13px] font-semibold text-gray-800">
+              {MONTH_VI[month - 1]} {year}
+            </span>
+            <button onClick={() => changeMonth(1)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-200">
+              ›
+            </button>
+          </div>
 
-        {/* Month pager */}
-        <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-          <button onClick={() => changeMonth(-1)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-200">
-            ‹
+          <button
+            onClick={() => { setYear(TODAY.getFullYear()); setMonth(TODAY.getMonth() + 1); setDetailEmpId(null); }}
+            className="h-8 rounded-lg border border-gray-200 bg-gray-50 px-3 text-[12px] font-medium text-gray-600 transition hover:bg-gray-100 whitespace-nowrap">
+            Hôm nay
           </button>
-          <span className="min-w-[130px] px-3 text-center text-[13px] font-semibold text-gray-800">
-            {MONTH_VI[month - 1]} {year}
-          </span>
-          <button onClick={() => changeMonth(1)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-200">
-            ›
-          </button>
+
+          {user?.role === 'admin' && (
+            <button
+              onClick={async () => {
+                const dateFrom = isoDateStr(year, month, 1);
+                const dateTo   = isoDateStr(year, month, new Date(year, month, 0).getDate());
+                try {
+                  if (workingMode === 'SHIFT') {
+                    const res = await attendanceService.exportSummary({ dateFrom, dateTo });
+                    const url = URL.createObjectURL(res.data);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `bao-cao-command-center-${month}-${year}.xlsx`; a.click();
+                    URL.revokeObjectURL(url);
+                  } else {
+                    const res = await attendanceService.exportGrid({ dateFrom, dateTo });
+                    const url = URL.createObjectURL(res.data);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = `bao-cao-ca-co-dinh-${month}-${year}.xlsx`; a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                } catch { /* non-critical */ }
+              }}
+              className="h-8 rounded-lg px-3 text-[12px] font-semibold text-white transition hover:opacity-90 whitespace-nowrap"
+              style={{ background: 'oklch(55% 0.13 200)' }}>
+              ↓ Xuất Excel
+            </button>
+          )}
         </div>
-
-        <button onClick={() => { setYear(TODAY.getFullYear()); setMonth(TODAY.getMonth() + 1); setDetailEmpId(null); }}
-          className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[13px] font-medium text-gray-600 transition hover:bg-gray-100">
-          Hôm nay
-        </button>
-
-        <button
-          onClick={async () => {
-            const dateFrom = isoDateStr(year, month, 1);
-            const dateTo   = isoDateStr(year, month, new Date(year, month, 0).getDate());
-            try {
-              const res = await attendanceService.exportGrid({ dateFrom, dateTo });
-              const url = URL.createObjectURL(res.data);
-              const a = document.createElement('a');
-              a.href = url; a.download = `bang-cham-cong-${month}-${year}.xlsx`; a.click();
-              URL.revokeObjectURL(url);
-            } catch { /* non-critical */ }
-          }}
-          className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white transition"
-          style={{ background: 'oklch(55% 0.13 200)' }}>
-          ↓ Xuất Excel
-        </button>
       </div>
 
-      {/* KPI strip */}
-      {!detailEmpId && <AdminAttendanceKpiStrip summary={summary} />}
+      {/* KPI strip — SHIFT shows scheduled/completed shift counts; FIXED shows OT hours + attendance rate */}
+      {!detailEmpId && <AdminAttendanceKpiStrip summary={summary} workingMode={workingMode} />}
 
       {/* Filter row */}
       {!detailEmpId && (
@@ -490,9 +561,9 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
 
           {!isEmployee && (
             <>
-              <FilterChip active={chipLate}   onClick={() => setChipLate(p => !p)}   label="Chỉ có đi trễ" />
-              <FilterChip active={chipAbsent} onClick={() => setChipAbsent(p => !p)} label="Có vắng mặt" />
-              <FilterChip active={chipOT}     onClick={() => setChipOT(p => !p)}     label="Có OT" />
+              <FilterChip active={chipLate}   onClick={() => setChipLate(p => !p)}   label="Đi trễ" />
+              <FilterChip active={chipEarly}  onClick={() => setChipEarly(p => !p)}  label="Về sớm" />
+              <FilterChip active={chipAnnual} onClick={() => setChipAnnual(p => !p)} label="Nghỉ có lương" />
             </>
           )}
 
@@ -541,6 +612,7 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
                 month={month}
                 todayDay={todayDay}
                 onSelectEmployee={setDetailEmpId}
+                shiftSchedules={shiftSchedules}
               />
             ) : (
               <AdminAttendanceGridView
