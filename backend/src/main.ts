@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import * as session from 'express-session';
 import * as os from 'os';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -37,6 +38,21 @@ async function bootstrap() {
 
   // Global logging interceptor
   app.useGlobalInterceptors(new LoggingInterceptor());
+
+  // Session — required for OAuth2 CSRF state verification
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET ?? process.env.JWT_SECRET ?? 'session-secret',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 5 * 60 * 1000, // 5 minutes — only needed for OAuth handshake
+      },
+    }),
+  );
 
   // CORS
   app.enableCors({

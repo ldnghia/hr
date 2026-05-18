@@ -77,6 +77,7 @@ model Employee {
   workingMode          String?                @default("FIXED") @map("working_mode")
   shiftId              Int?                   @map("shift_id")
   telegramId           String?                @map("telegram_id")
+  googleId             String?                @unique @map("google_id")
   attendance           Attendance[]
   attendanceLogs       AttendanceLog[]
   auditLogs            AuditLog[]
