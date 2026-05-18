@@ -20,6 +20,7 @@ export function WfmBadges({ record }: { record: AttendanceRecord }) {
       {!record.isLate && !record.isEarlyOut && !record.isOvertime && record.checkinTime && (
         <Badge label={t('attendance.onTime')} variant="success" />
       )}
+      {(record as any).forgotCheckout && <Badge label={t('attendance.forgotCheckout')} variant="warning" />}
       {record.isCorrected && <Badge label={t('attendance.corrected')} variant="neutral" />}
       {latestCorrection?.status === 'pending' && <Badge label={t('attendance.correctionPending')} variant="warning" />}
       {latestCorrection?.status === 'rejected' && <Badge label={t('attendance.correctionRejected')} variant="danger" />}
@@ -51,32 +52,32 @@ export function AttendanceHistoryTable({
       <table className="w-full text-sm">
         <thead className="border-b border-gray-100 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
           <tr>
-            <th className="px-6 py-3 text-left">{t('common.date')}</th>
-            <th className="px-6 py-3 text-left">{t('attendance.shiftLabel')}</th>
-            <th className="px-6 py-3 text-left">{t('attendance.checkinLabel')}</th>
-            <th className="px-6 py-3 text-left">{t('attendance.checkoutLabel')}</th>
-            <th className="px-6 py-3 text-left">{t('reports.colHours')}</th>
-            <th className="px-6 py-3 text-left">{t('common.status')}</th>
-            <th className="px-6 py-3 text-left">{t('common.notes')}</th>
-            <th className="px-6 py-3 text-left">{t('common.actions')}</th>
+            <th className="px-6 py-3 text-left whitespace-nowrap">{t('common.date')}</th>
+            <th className="px-6 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('attendance.shiftLabel')}</th>
+            <th className="px-6 py-3 text-left whitespace-nowrap">{t('attendance.checkinLabel')}</th>
+            <th className="px-6 py-3 text-left whitespace-nowrap">{t('attendance.checkoutLabel')}</th>
+            <th className="px-6 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('reports.colHours')}</th>
+            <th className="px-6 py-3 text-left whitespace-nowrap">{t('common.status')}</th>
+            <th className="px-6 py-3 text-left whitespace-nowrap hidden xl:table-cell">{t('common.notes')}</th>
+            <th className="px-6 py-3 text-left whitespace-nowrap w-32">{t('common.actions')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
           {records.map((rec) => (
             <tr key={rec.id} className="hover:bg-gray-50 transition-colors">
-              <td className="px-6 py-3 text-gray-700">{formatDate(rec.date)}</td>
-              <td className="px-6 py-3 text-gray-500 text-xs">
+              <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(rec.date)}</td>
+              <td className="px-6 py-3 text-gray-500 text-xs hidden md:table-cell">
                 {rec.shift ? rec.shift.name : '—'}
                 {rec.shift && <span className="block text-gray-400">{rec.shift.startTime}–{rec.shift.endTime}</span>}
               </td>
-              <td className="px-6 py-3 text-gray-600">{formatDateTime(rec.checkinTime)}</td>
-              <td className="px-6 py-3 text-gray-600">{formatDateTime(rec.checkoutTime)}</td>
-              <td className="px-6 py-3 font-medium text-indigo-600">{formatHours(rec.workingHours)}</td>
+              <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDateTime(rec.checkinTime)}</td>
+              <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDateTime(rec.checkoutTime)}</td>
+              <td className="px-6 py-3 font-medium text-indigo-600 whitespace-nowrap hidden md:table-cell">{formatHours(rec.workingHours)}</td>
               <td className="px-6 py-3">
                 <div className="flex flex-wrap items-center gap-1">
                   <WfmBadges record={rec} />
                   {rec.isInOffice !== undefined && (
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
                       rec.isInOffice ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
                     }`}>
                       {rec.isInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}
@@ -84,7 +85,7 @@ export function AttendanceHistoryTable({
                   )}
                 </div>
               </td>
-              <td className="px-6 py-3">
+              <td className="px-6 py-3 hidden xl:table-cell">
                 <div className="flex flex-col gap-1 text-[10px] text-gray-500 max-w-[200px]">
                   {rec.checkinNote && <div className="bg-gray-50 p-1 rounded"><span className="font-bold text-gray-400">IN:</span> {rec.checkinNote}</div>}
                   {rec.checkoutNote && <div className="bg-gray-50 p-1 rounded"><span className="font-bold text-gray-400">OUT:</span> {rec.checkoutNote}</div>}

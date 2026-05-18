@@ -155,6 +155,10 @@ export class AttendanceService {
     return this.queryService.getUnclosedSessions(employeeId);
   }
 
+  markForgotCheckout(employeeId: number, attendanceId: number) {
+    return this.checkinService.markForgotCheckout(employeeId, attendanceId);
+  }
+
   getMyShiftsCurrentMonth(employeeId: number) {
     return this.queryService.getMyShiftsCurrentMonth(employeeId);
   }

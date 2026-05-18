@@ -415,33 +415,33 @@ export default function WorkingShiftsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-5 py-3 text-left">{t('workingShift.colName')}</th>
-                  <th className="px-5 py-3 text-left">{t('workingShift.colCode')}</th>
-                  <th className="px-5 py-3 text-left">{t('workingShift.colTime')}</th>
-                  <th className="px-5 py-3 text-left">{t('workingShift.colDepartment')}</th>
-                  <th className="px-5 py-3 text-right">{t('workingShift.colBreak')}</th>
-                  <th className="px-5 py-3 text-right">{t('workingShift.colGraceLate')}</th>
-                  <th className="px-5 py-3 text-center">{t('workingShift.colDefault')}</th>
-                  <th className="px-5 py-3 text-center">{t('workingShift.colStatus')}</th>
-                  {canEdit && <th className="px-5 py-3 text-right">{t('workingShift.colActions')}</th>}
+                  <th className="px-5 py-3 text-left whitespace-nowrap min-w-[140px]">{t('workingShift.colName')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap w-28 hidden sm:table-cell">{t('workingShift.colCode')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap">{t('workingShift.colTime')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('workingShift.colDepartment')}</th>
+                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('workingShift.colBreak')}</th>
+                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('workingShift.colGraceLate')}</th>
+                  <th className="px-5 py-3 text-center whitespace-nowrap hidden md:table-cell">{t('workingShift.colDefault')}</th>
+                  <th className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">{t('workingShift.colStatus')}</th>
+                  {canEdit && <th className="px-5 py-3 text-right whitespace-nowrap w-32">{t('workingShift.colActions')}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {shifts.map((s) => (
                   <tr key={s.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{s.name}</td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 whitespace-nowrap hidden sm:table-cell">
                       <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">
                         {s.code}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-gray-700">
+                    <td className="px-5 py-3 whitespace-nowrap text-gray-700">
                       <span className="font-mono">
                         {formatTime(s.startTime)} → {formatTime(s.endTime)}
                       </span>
                       {s.isCrossDay && <CrossDayBadge />}
                     </td>
-                    <td className="px-5 py-3 text-gray-500">
+                    <td className="px-5 py-3 text-gray-500 hidden md:table-cell">
                       {s.department ? (
                         <span>
                           {s.department.name}{' '}
@@ -451,33 +451,33 @@ export default function WorkingShiftsPage() {
                         <span className="text-xs text-indigo-600 font-medium">{t('workingShift.global')}</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-right text-gray-500">
+                    <td className="px-5 py-3 text-right text-gray-500 whitespace-nowrap hidden lg:table-cell">
                       {s.breakMinutes}m
                     </td>
-                    <td className="px-5 py-3 text-right text-gray-500">
+                    <td className="px-5 py-3 text-right text-gray-500 whitespace-nowrap hidden lg:table-cell">
                       {s.graceLateMinutes}m
                     </td>
-                    <td className="px-5 py-3 text-center">
+                    <td className="px-5 py-3 text-center whitespace-nowrap hidden md:table-cell">
                       {s.isDefault && (
-                        <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+                        <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700 whitespace-nowrap">
                           {t('workingShift.colDefault')}
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-center">
+                    <td className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">
                       {s.isActive ? (
-                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 whitespace-nowrap">
                           {t('common.active')}
                         </span>
                       ) : (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500 whitespace-nowrap">
                           {t('common.inactive')}
                         </span>
                       )}
                     </td>
                     {canEdit && (
                       <td className="px-5 py-3">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 whitespace-nowrap">
                           <button
                             onClick={() => openEdit(s)}
                             className="rounded px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50"

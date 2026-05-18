@@ -1,22 +1,21 @@
 'use client';
 
 import { useEffect } from 'react';
-import i18n from '@/lib/i18n';
+import { useTranslation } from 'react-i18next';
 
 /**
- * Applies the user's stored language preference after hydration.
- *
- * i18n always initializes with 'vi' so SSR and the first client render agree
- * (no hydration mismatch). This component runs once after mount and switches
- * to the localStorage value if it differs from the default.
+ * Applies the stored language preference after hydration.
+ * Must run after first render so SSR and client HTML match before switching.
  */
 export function I18nInitializer() {
+  const { i18n } = useTranslation();
+
   useEffect(() => {
-    const saved = localStorage.getItem('i18nextLng');
-    if (saved && saved !== i18n.language) {
-      i18n.changeLanguage(saved);
+    const stored = localStorage.getItem('language');
+    if (stored && stored !== i18n.language) {
+      i18n.changeLanguage(stored);
     }
-  }, []);
+  }, [i18n]);
 
   return null;
 }

@@ -121,20 +121,15 @@ export default function AttendancePage() {
     refetchSessions,
   });
 
-  // Checkout for unclosed sessions from previous days (pass attendanceId directly)
+  // Mark unclosed sessions as "forgot checkout" — leaves checkoutTime empty
   async function handleUnclosedCheckOut(attendanceId: number) {
     try {
       await import('@/services/attendance.service').then(({ attendanceService: svc }) =>
-        svc.checkOut({
-          lat: geo.lat ?? undefined,
-          lng: geo.lng ?? undefined,
-          locationNote: needsReason ? locationNote.trim() || 'Late checkout — forgot to check out' : undefined,
-          attendanceId,
-        }),
+        svc.markForgotCheckout(attendanceId),
       );
       await Promise.all([refetchSessions(), refetchUnclosed()]);
     } catch {
-      // non-critical: banner stays visible if checkout fails
+      // non-critical: banner stays visible if request fails
     }
   }
 

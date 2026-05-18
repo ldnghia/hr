@@ -41,7 +41,7 @@ export function Table<T>({
               <th
                 key={col.key}
                 className={cn(
-                  'px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500',
+                  'px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap',
                   col.headerClassName,
                 )}
               >

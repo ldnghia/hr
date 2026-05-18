@@ -198,12 +198,12 @@ function AdminBalancePanel() {
           <table className="w-full text-sm">
             <thead className="border-b border-gray-100 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-6 py-3 text-left">{t('leave.colEmployee')}</th>
-                <th className="px-6 py-3 text-center">{t('leave.colTotal')}</th>
-                <th className="px-6 py-3 text-center">{t('leave.colUsed')}</th>
-                <th className="px-6 py-3 text-center">{t('leave.colRemaining')}</th>
-                <th className="px-6 py-3 text-left">{t('leave.colUsage')}</th>
-                <th className="px-6 py-3" />
+                <th className="px-6 py-3 text-left whitespace-nowrap min-w-[160px]">{t('leave.colEmployee')}</th>
+                <th className="px-6 py-3 text-center whitespace-nowrap">{t('leave.colTotal')}</th>
+                <th className="px-6 py-3 text-center whitespace-nowrap">{t('leave.colUsed')}</th>
+                <th className="px-6 py-3 text-center whitespace-nowrap">{t('leave.colRemaining')}</th>
+                <th className="px-6 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('leave.colUsage')}</th>
+                <th className="px-6 py-3 whitespace-nowrap" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -221,7 +221,7 @@ function AdminBalancePanel() {
                     <td className="px-6 py-3 text-center font-medium">{total}</td>
                     <td className="px-6 py-3 text-center text-amber-600">{used}</td>
                     <td className="px-6 py-3 text-center font-semibold text-emerald-600">{remaining}</td>
-                    <td className="px-6 py-3 w-32">
+                    <td className="px-6 py-3 w-32 hidden md:table-cell">
                       <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
                         <div
                           className={['h-full rounded-full', pct >= 90 ? 'bg-red-400' : pct >= 60 ? 'bg-amber-400' : 'bg-emerald-400'].join(' ')}
@@ -486,14 +486,14 @@ export default function LeavePage() {
                 <table className="w-full text-sm">
                   <thead className="border-b border-gray-100 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                     <tr>
-                      {isAdminOrHR && <th className="px-6 py-3 text-left">{t('leave.colEmployee')}</th>}
-                      <th className="px-6 py-3 text-left">{t('leave.colType')}</th>
-                      <th className="px-6 py-3 text-left">Lý do</th>
-                      <th className="px-6 py-3 text-left">{t('leave.colDateRange')}</th>
-                      <th className="px-6 py-3 text-left">{t('leave.colDays')}</th>
-                      <th className="px-6 py-3 text-left">{t('leave.colStatus')}</th>
-                      <th className="px-6 py-3 text-left">{t('leave.colStep')}</th>
-                      <th className="px-6 py-3 text-left">{t('leave.colActions')}</th>
+                      {isAdminOrHR && <th className="px-6 py-3 text-left whitespace-nowrap min-w-[160px]">{t('leave.colEmployee')}</th>}
+                      <th className="px-6 py-3 text-left whitespace-nowrap">{t('leave.colType')}</th>
+                      <th className="px-6 py-3 text-left whitespace-nowrap hidden lg:table-cell">Lý do</th>
+                      <th className="px-6 py-3 text-left whitespace-nowrap">{t('leave.colDateRange')}</th>
+                      <th className="px-6 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('leave.colDays')}</th>
+                      <th className="px-6 py-3 text-left whitespace-nowrap">{t('leave.colStatus')}</th>
+                      <th className="px-6 py-3 text-left whitespace-nowrap hidden lg:table-cell">{t('leave.colStep')}</th>
+                      <th className="px-6 py-3 text-left whitespace-nowrap">{t('leave.colActions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -510,7 +510,7 @@ export default function LeavePage() {
                           </td>
                         )}
                         <td className="px-6 py-3">{statusBadge(leave.type)}</td>
-                        <td className="px-6 py-3 text-gray-600 max-w-[200px]">
+                        <td className="px-6 py-3 text-gray-600 max-w-[200px] hidden lg:table-cell">
                           <p className="truncate text-sm" title={leave.reason}>{leave.reason || <span className="text-gray-300">—</span>}</p>
                         </td>
                         <td className="px-6 py-3 text-gray-600 whitespace-nowrap">
@@ -519,9 +519,9 @@ export default function LeavePage() {
                             <> <span className="text-gray-400">→</span> {formatDate(leave.toDate)}</>
                           )}
                         </td>
-                        <td className="px-6 py-3 font-medium text-gray-800">{leave.days}</td>
+                        <td className="px-6 py-3 font-medium text-gray-800 hidden md:table-cell">{leave.days}</td>
                         <td className="px-6 py-3">{statusBadge(leave.status)}</td>
-                        <td className="px-6 py-3 text-gray-500 text-xs">{leave.currentStep}/2</td>
+                        <td className="px-6 py-3 text-gray-500 text-xs hidden lg:table-cell">{leave.currentStep}/2</td>
                         <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-2">
                             {leave.status === 'pending' && isApprover && (
@@ -547,7 +547,7 @@ export default function LeavePage() {
                     ))}
                     {result?.data.length === 0 && (
                       <tr>
-                        <td colSpan={isAdminOrHR ? 8 : 7} className="px-6 py-12 text-center text-sm text-gray-400">
+                        <td colSpan={isAdminOrHR ? 8 : 7} className="px-6 py-12 text-center text-sm text-gray-400" style={{ display: 'table-cell' }}>
                           {t('leave.noRequests')}
                         </td>
                       </tr>

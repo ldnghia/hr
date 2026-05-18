@@ -385,21 +385,21 @@ export default function DepartmentsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-5 py-3 text-left">{t('department.colName')}</th>
-                  <th className="px-5 py-3 text-left">{t('department.colCode')}</th>
-                  <th className="px-5 py-3 text-left">{t('department.colWorkingType')}</th>
-                  <th className="px-5 py-3 text-left">{t('department.colBranch')}</th>
-                  <th className="px-5 py-3 text-right">{t('department.colPositions')}</th>
-                  <th className="px-5 py-3 text-right">{t('department.colEmployees')}</th>
-                  <th className="px-5 py-3 text-center">{t('department.colStatus')}</th>
-                  {canEdit && <th className="px-5 py-3 text-right">{t('common.actions')}</th>}
+                  <th className="px-5 py-3 text-left whitespace-nowrap min-w-[160px]">{t('department.colName')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap hidden sm:table-cell w-24">{t('department.colCode')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap">{t('department.colWorkingType')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('department.colBranch')}</th>
+                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('department.colPositions')}</th>
+                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('department.colEmployees')}</th>
+                  <th className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">{t('department.colStatus')}</th>
+                  {canEdit && <th className="px-5 py-3 text-right whitespace-nowrap w-32">{t('common.actions')}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {departments.map((dept) => (
                   <tr key={dept.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{dept.name}</td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 hidden sm:table-cell whitespace-nowrap">
                       <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">
                         {dept.code}
                       </span>
@@ -407,27 +407,27 @@ export default function DepartmentsPage() {
                     <td className="px-5 py-3">
                       <WorkingTypeBadge type={dept.workingType} />
                     </td>
-                    <td className="px-5 py-3 text-gray-500">{dept.branch?.name ?? '—'}</td>
-                    <td className="px-5 py-3 text-right text-gray-500">
+                    <td className="px-5 py-3 text-gray-500 hidden md:table-cell">{dept.branch?.name ?? '—'}</td>
+                    <td className="px-5 py-3 text-right text-gray-500 hidden lg:table-cell">
                       {dept._count?.positions ?? '—'}
                     </td>
-                    <td className="px-5 py-3 text-right text-gray-500">
+                    <td className="px-5 py-3 text-right text-gray-500 hidden lg:table-cell">
                       {dept._count?.employees ?? '—'}
                     </td>
-                    <td className="px-5 py-3 text-center">
+                    <td className="px-5 py-3 text-center hidden sm:table-cell whitespace-nowrap">
                       {dept.isActive ? (
-                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 whitespace-nowrap">
                           {t('common.active')}
                         </span>
                       ) : (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500 whitespace-nowrap">
                           {t('common.inactive')}
                         </span>
                       )}
                     </td>
                     {canEdit && (
                       <td className="px-5 py-3">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 whitespace-nowrap">
                           <button
                             onClick={() => openEdit(dept)}
                             className="rounded px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50"

@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 import './globals.css';
 import { Providers } from './Providers';
-import { ServiceWorkerRegistration } from '@/components/pwa/ServiceWorkerRegistration';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -50,7 +49,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="h-full bg-gray-50 antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
-        <ServiceWorkerRegistration />
       </body>
     </html>
   );

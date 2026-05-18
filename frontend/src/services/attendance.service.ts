@@ -163,6 +163,10 @@ export const attendanceService = {
   unclosedSessions: () =>
     api.get<{ data: AttendanceSession[] }>('/attendance/unclosed').then((r) => r.data.data ?? []),
 
+  /** PATCH /attendance/:id/forgot-checkout — mark session as forgot checkout, leave checkoutTime empty */
+  markForgotCheckout: (attendanceId: number) =>
+    api.patch(`/attendance/${attendanceId}/forgot-checkout`),
+
   /** GET /attendance/my-shifts/current-month — assigned shifts this month */
   myShiftsCurrentMonth: () =>
     api.get<{ data: MonthlyShift[] }>('/attendance/my-shifts/current-month').then((r) => r.data.data),

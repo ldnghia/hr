@@ -142,6 +142,20 @@ export class AttendanceController {
     return this.attendanceService.getUnclosedSessions(employeeId);
   }
 
+  // ── PATCH /attendance/:id/forgot-checkout ─────────────────────────────────
+
+  @Patch(':id/forgot-checkout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark an unclosed session as forgot-checkout (no checkoutTime recorded)',
+  })
+  markForgotCheckout(
+    @CurrentUser('id') employeeId: number,
+    @Param('id', ParseIntPipe) attendanceId: number,
+  ) {
+    return this.attendanceService.markForgotCheckout(employeeId, attendanceId);
+  }
+
   // ── GET /attendance/my-shifts/current-month ───────────────────────────────
 
   @Get('my-shifts/current-month')

@@ -332,6 +332,7 @@ model Attendance {
   hasLocation     Boolean   @default(false) @map("has_location")
   checkinNote     String?   @map("checkin_note")
   checkoutNote    String?   @map("checkout_note")
+  forgotCheckout      Boolean   @default(false) @map("forgot_checkout")
   isCorrected         Boolean   @default(false) @map("is_corrected")
   correctionRequestId Int?      @unique @map("correction_request_id")
   employee            Employee? @relation(fields: [employeeId], references: [id])

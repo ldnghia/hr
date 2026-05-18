@@ -330,13 +330,13 @@ export default function PositionsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-5 py-3 text-left">{t('common.name')}</th>
-                  <th className="px-5 py-3 text-left">{t('common.code')}</th>
-                  <th className="px-5 py-3 text-left">{t('common.department')}</th>
-                  <th className="px-5 py-3 text-left">{t('department.colWorkingType')}</th>
-                  <th className="px-5 py-3 text-right">{t('department.colEmployees')}</th>
-                  <th className="px-5 py-3 text-center">{t('department.colStatus')}</th>
-                  {canEdit && <th className="px-5 py-3 text-right">{t('common.actions')}</th>}
+                  <th className="px-5 py-3 text-left whitespace-nowrap min-w-[160px]">{t('common.name')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap w-24 hidden sm:table-cell">{t('common.code')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('common.department')}</th>
+                  <th className="px-5 py-3 text-left whitespace-nowrap hidden sm:table-cell">{t('department.colWorkingType')}</th>
+                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('department.colEmployees')}</th>
+                  <th className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">{t('department.colStatus')}</th>
+                  {canEdit && <th className="px-5 py-3 text-right whitespace-nowrap w-32">{t('common.actions')}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -350,12 +350,12 @@ export default function PositionsPage() {
                         </p>
                       )}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 whitespace-nowrap hidden sm:table-cell">
                       <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">
                         {pos.code}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-gray-700">
+                    <td className="px-5 py-3 text-gray-700 hidden md:table-cell">
                       {pos.department ? (
                         <span>
                           {pos.department.name}{' '}
@@ -363,34 +363,34 @@ export default function PositionsPage() {
                         </span>
                       ) : '—'}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-5 py-3 hidden sm:table-cell">
                       {pos.department?.workingType === 'SHIFT' ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 whitespace-nowrap">
                           SHIFT
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 whitespace-nowrap">
                           FIXED
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-right text-gray-500">
+                    <td className="px-5 py-3 text-right text-gray-500 hidden lg:table-cell">
                       {pos._count?.employees ?? '—'}
                     </td>
-                    <td className="px-5 py-3 text-center">
+                    <td className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">
                       {pos.isActive ? (
-                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 whitespace-nowrap">
                           {t('common.active')}
                         </span>
                       ) : (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500 whitespace-nowrap">
                           {t('common.inactive')}
                         </span>
                       )}
                     </td>
                     {canEdit && (
                       <td className="px-5 py-3">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 whitespace-nowrap">
                           <button
                             onClick={() => openEdit(pos)}
                             className="rounded px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50"

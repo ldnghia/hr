@@ -35,12 +35,13 @@ export function EmployeeTable({
     {
       key: 'employee',
       header: t('employee.colEmployee'),
+      headerClassName: 'min-w-[180px]',
       render: (emp) => (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <EmployeeAvatar name={emp.fullName ?? 'U'} size="md" />
-          <div>
-            <p className="font-medium text-gray-900">{emp.fullName}</p>
-            <p className="text-xs text-gray-400">{emp.email}</p>
+          <div className="min-w-0">
+            <p className="font-medium text-gray-900 truncate">{emp.fullName}</p>
+            <p className="text-xs text-gray-400 truncate">{emp.email}</p>
           </div>
         </div>
       ),

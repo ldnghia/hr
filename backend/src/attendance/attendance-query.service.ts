@@ -222,15 +222,33 @@ export class AttendanceQueryService {
         employeeId,
         checkinTime: { not: null },
         checkoutTime: null,
+        forgotCheckout: false,
         date: { lt: todayUtc },
       },
       include: {
-        shift: { select: { id: true, name: true, startTime: true, endTime: true } },
+        shift: { select: { id: true, name: true, startTime: true, endTime: true, isCrossDay: true } },
       },
       orderBy: { date: 'desc' },
     });
 
-    return { data: sessions };
+    // Exclude cross-day sessions that are still within their active window.
+    // e.g. shift 23:00–06:00: if current time is 01:30, worker is still in shift
+    // → do NOT show in unclosed banner until past shift end time.
+    const currentHHMM = now.getHours() * 60 + now.getMinutes();
+    const filtered = sessions.filter((s) => {
+      if (!s.shift?.isCrossDay) return true; // non-cross-day: always show if unclosed
+
+      // Parse shift end time (HH:MM) into minutes
+      const [endH, endM] = (s.shift.endTime ?? '00:00').split(':').map(Number);
+      const endMinutes = endH * 60 + endM;
+
+      // Session is still active if current time hasn't passed the shift end time today
+      // (cross-day shift ends in the morning of the next day)
+      const stillActive = currentHHMM < endMinutes;
+      return !stillActive; // exclude if still active
+    });
+
+    return { data: filtered };
   }
 
   // ─── My shifts for current month ─────────────────────────────────────────

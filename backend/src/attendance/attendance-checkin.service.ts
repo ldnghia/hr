@@ -343,4 +343,25 @@ export class AttendanceCheckinService {
       overtimeHours: overtimeHours ?? 0,
     };
   }
+
+  // ─── Mark forgot checkout (no checkoutTime recorded) ─────────────────────
+
+  async markForgotCheckout(employeeId: number, attendanceId: number) {
+    const record = await this.prisma.attendance.findUnique({ where: { id: attendanceId } });
+    if (!record) throw new BadRequestException(`Attendance record #${attendanceId} not found`);
+    if (record.employeeId !== employeeId) throw new BadRequestException('Forbidden');
+    if (!record.checkinTime) throw new BadRequestException('Record has no check-in time');
+    if (record.checkoutTime) throw new BadRequestException('Session already closed');
+    if (record.forgotCheckout) throw new BadRequestException('Already marked as forgot checkout');
+
+    const updated = await this.prisma.attendance.update({
+      where: { id: attendanceId },
+      data: {
+        forgotCheckout: true,
+        checkoutNote: 'Quên checkout',
+      },
+    });
+
+    return { attendance: updated };
+  }
 }
