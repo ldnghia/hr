@@ -21,7 +21,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientSecret,
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
       scope: ['email', 'profile'],
-      state: true, // enables session-backed CSRF state verification
     });
   }
 
