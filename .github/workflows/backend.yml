@@ -66,6 +66,11 @@ jobs:
           npm run build
 
       - name: Restart PM2
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_CALLBACK_URL: ${{ secrets.GOOGLE_CALLBACK_URL }}
         run: |
-          pm2 restart hr-backend || pm2 start /home/phamhai/hr/hr_project/backend/dist/src/main.js --name hr-backend
+          cd /home/phamhai/hr/hr_project
+          pm2 reload ecosystem.config.js --only hr-backend --update-env || pm2 start ecosystem.config.js --only hr-backend
           pm2 save
