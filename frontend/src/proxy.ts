@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * Paths that do NOT require authentication.
  * Everything else is protected — unauthenticated users are sent to /login.
  */
-const PUBLIC_PATHS = ['/login'];
+const PUBLIC_PATHS = ['/login', '/auth/callback'];
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

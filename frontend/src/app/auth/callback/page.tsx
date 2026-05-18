@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { setToken } from '@/utils/token';
 
 function OAuthCallbackInner() {
   const router = useRouter();
@@ -12,7 +13,7 @@ function OAuthCallbackInner() {
     const error = params.get('error');
 
     if (token) {
-      localStorage.setItem('token', token);
+      setToken(token); // stores under 'hr_access_token' + sets hr_token cookie
       router.replace('/dashboard');
     } else {
       router.replace(`/login?error=${error ?? 'oauth_failed'}`);
