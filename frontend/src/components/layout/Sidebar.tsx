@@ -144,6 +144,27 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: '/devices',
+    labelKey: 'nav.myDevices',
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/devices',
+    labelKey: 'nav.manageDevices',
+    roles: ['admin', 'hr'],
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+      </svg>
+    ),
+  },
+  {
     href: '/settings',
     labelKey: 'nav.settings',
     roles: ['admin', 'hr'],

@@ -4,6 +4,7 @@ import { ShiftResolverService } from './helpers/shift-resolver';
 import { computeSessionDate, computeSessionFlags } from './helpers/session-hours';
 import { LocationService, haversineMetres } from './location.service';
 import { CalendarService } from '../calendar/calendar.service';
+import { DeviceValidationService } from '../device/device-validation.service';
 import { CheckInDto } from './dto/check-in.dto';
 import { CheckOutDto } from './dto/check-out.dto';
 
@@ -14,6 +15,7 @@ export class AttendanceCheckinService {
     private readonly shiftResolver: ShiftResolverService,
     private readonly locationService: LocationService,
     private readonly calendarService: CalendarService,
+    private readonly deviceValidation: DeviceValidationService,
   ) {}
 
   // ─── Check-in ─────────────────────────────────────────────────────────────
@@ -135,8 +137,16 @@ export class AttendanceCheckinService {
     const distanceM = nearestLoc?.distanceM;
     const dayInfo = await this.calendarService.checkDay(dateStr);
 
+    // 7b. Device validation
+    const { unknown: isUnknownDevice } = await this.deviceValidation.validateForCheckIn(
+      employeeId,
+      dto.deviceId,
+    );
+
     // 8. Compute late flag
     const { isLate } = computeSessionFlags(ts, null, shift);
+
+    const unknownDeviceNote = isUnknownDevice ? '[THIẾT BỊ CHƯA ĐĂNG KÝ] ' : '';
 
     // 9. Upsert attendance row (composite key: employeeId + date + shiftId)
     const attendance = await this.prisma.attendance.upsert({
@@ -152,8 +162,9 @@ export class AttendanceCheckinService {
         officeDistanceM,
         isInOffice,
         hasLocation: hasGps,
-        checkinNote: locationNote,
+        checkinNote: unknownDeviceNote + (locationNote ?? ''),
         locationNote,
+        isUnknownDevice,
       },
       update: {
         checkinTime: ts,
@@ -163,8 +174,9 @@ export class AttendanceCheckinService {
         officeDistanceM,
         isInOffice,
         hasLocation: hasGps,
-        checkinNote: locationNote,
+        checkinNote: unknownDeviceNote + (locationNote ?? ''),
         locationNote,
+        isUnknownDevice,
       },
     });
 
@@ -187,6 +199,7 @@ export class AttendanceCheckinService {
     return {
       attendance,
       isLate,
+      isUnknownDevice,
       dayInfo,
       shift: { id: shift.id, startTime: shift.startTime, endTime: shift.endTime },
       location: resolvedLocationId ? { id: resolvedLocationId, distanceM } : null,
@@ -295,6 +308,12 @@ export class AttendanceCheckinService {
       throw new BadRequestException(`You are outside "${officeName}". Please provide a reason to clock out.`);
     }
 
+    // Device validation (warn-only for checkout — user may have switched device)
+    const { unknown: isUnknownDeviceOut } = await this.deviceValidation.validateForCheckOut(
+      employeeId,
+      dto.deviceId,
+    );
+
     const resolvedLocationId = nearestLoc?.id;
     const distanceM = nearestLoc?.distanceM;
 
@@ -306,6 +325,7 @@ export class AttendanceCheckinService {
       shift as any, // shift is included via relation
     );
 
+    const checkoutUnknownNote = isUnknownDeviceOut ? '[THIẾT BỊ CHƯA ĐĂNG KÝ] ' : '';
     const updated = await this.prisma.attendance.update({
       where: { id: target.id },
       data: {
@@ -316,7 +336,7 @@ export class AttendanceCheckinService {
         overtimeHours,
         checkoutLat: dto.lat,
         checkoutLng: dto.lng,
-        checkoutNote: locationNote,
+        checkoutNote: checkoutUnknownNote + (locationNote ?? ''),
       },
     });
 

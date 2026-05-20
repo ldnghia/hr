@@ -106,6 +106,9 @@ model Employee {
   createdShiftSchedules EmployeeShiftSchedule[]  @relation("ScheduleCreatedBy")
   dayOffs              EmployeeDayOff[]          @relation("EmployeeToDayOff")
   createdDayOffs       EmployeeDayOff[]          @relation("DayOffCreatedBy")
+  deviceValidationMode String                    @default("STRICT") @map("device_validation_mode")
+  registeredDevices    RegisteredDevice[]        @relation("EmployeeToDevices")
+  registeredDevicesByMe RegisteredDevice[]       @relation("DeviceRegisteredBy")
 
   @@map("employee")
 }
@@ -336,6 +339,7 @@ model Attendance {
   forgotCheckout      Boolean   @default(false) @map("forgot_checkout")
   isCorrected         Boolean   @default(false) @map("is_corrected")
   correctionRequestId Int?      @unique @map("correction_request_id")
+  isUnknownDevice     Boolean   @default(false) @map("is_unknown_device")
   employee            Employee? @relation(fields: [employeeId], references: [id])
   shift               Shift?    @relation(fields: [shiftId], references: [id])
   corrections         AttendanceCorrectionRequest[] @relation("AttendanceToCorrections")
@@ -526,4 +530,25 @@ model EmployeeDayOff {
   @@unique([employeeId, date])
   @@index([employeeId, date])
   @@map("employee_day_off")
+}
+
+// ─── Device Registration ──────────────────────────────────────────────────────
+
+model RegisteredDevice {
+  id                Int       @id @default(autoincrement())
+  employeeId        Int       @map("employee_id")
+  deviceFingerprint String    @map("device_fingerprint")
+  deviceName        String?   @map("device_name")
+  userAgent         String?   @map("user_agent")
+  isActive          Boolean   @default(true) @map("is_active")
+  registeredAt      DateTime  @default(now()) @map("registered_at")
+  registeredById    Int?      @map("registered_by_id")
+  lastUsedAt        DateTime? @map("last_used_at")
+
+  employee     Employee  @relation("EmployeeToDevices", fields: [employeeId], references: [id])
+  registeredBy Employee? @relation("DeviceRegisteredBy", fields: [registeredById], references: [id])
+
+  @@unique([employeeId, deviceFingerprint], name: "employee_device_unique")
+  @@index([employeeId, isActive])
+  @@map("registered_device")
 }

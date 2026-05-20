@@ -73,6 +73,7 @@ export interface NearestBranch {
 export interface CheckInResponse {
   attendance: AttendanceRecord;
   isLate: boolean;
+  isUnknownDevice: boolean;
   shift: { name: string; startTime: string; endTime: string } | null;
   location: { id: number; distanceM: number } | null;
   office: { status: 'IN_OFFICE' | 'OUTSIDE'; distanceM: number } | null;

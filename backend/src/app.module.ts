@@ -21,6 +21,7 @@ import { NotificationModule } from './notification/notification.module';
 import { AttendanceCorrectionModule } from './attendance-correction/attendance-correction.module';
 import { ShiftAssignmentModule } from './shift-assignment/shift-assignment.module';
 import { ShiftScheduleModule } from './shift-schedule/shift-schedule.module';
+import { DeviceModule } from './device/device.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { ShiftScheduleModule } from './shift-schedule/shift-schedule.module';
     AttendanceCorrectionModule,
     ShiftAssignmentModule,
     ShiftScheduleModule,
+    DeviceModule,
   ],
 })
 export class AppModule {}

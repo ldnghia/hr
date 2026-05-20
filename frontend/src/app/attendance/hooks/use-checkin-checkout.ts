@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { attendanceService } from '@/services/attendance.service';
 import type { MultipleOpenSessionsError, NearestBranch } from '@/services/attendance.service';
 import { formatDateTime } from '@/utils/format';
+import { getDeviceFingerprint } from '@/lib/device-fingerprint';
 
 interface GeoState {
   lat: number | null;
@@ -68,10 +69,12 @@ export function useCheckinCheckout({
     return true;
   }
 
-  function gpsPayload(shiftId?: number) {
+  async function gpsPayload(shiftId?: number) {
+    const deviceId = await getDeviceFingerprint();
     return {
       lat: geo.lat ?? undefined,
       lng: geo.lng ?? undefined,
+      deviceId,
       locationNote: needsReason ? locationNote.trim() : undefined,
       // Always send shiftId so backend skips auto-detection and uses the correct shift
       ...(shiftId ? { shiftId } : {}),
@@ -94,22 +97,28 @@ export function useCheckinCheckout({
     if (!guardReason()) return;
     setLoadingShiftId(shiftId);
     try {
-      const result = await attendanceService.checkIn(gpsPayload(shiftId));
+      const result = await attendanceService.checkIn(await gpsPayload(shiftId));
       if (result.office) setConfirmedOffice(result.office);
       if (result.nearestBranch) setConfirmedBranch(result.nearestBranch);
       setLocationSource(result.locationSource ?? null);
       setLocationNote('');
       setForceReason(false);
-      const msg = result.isLate
+      let msg = result.isLate
         ? `${t('attendance.checkIn')} ${formatDateTime(result.attendance.checkinTime)} — ${t('attendance.late')}`
         : `${t('attendance.checkIn')} ${formatDateTime(result.attendance.checkinTime)} — ${t('attendance.onTime')}`;
+      if (result.isUnknownDevice) msg += ` · ⚠️ Thiết bị chưa đăng ký`;
       setActionMsg({ type: result.isLate ? 'error' : 'success', text: msg });
       await refetchSessions();
     } catch (err) {
       const msg = extractErrMsg(err, 'Check-in failed. Please try again.');
       console.error('[attendance] Check-in failed:', msg);
-      if (msg.toLowerCase().includes('reason')) { setForceReason(true); setNoteError(msg); }
-      else setActionMsg({ type: 'error', text: msg });
+      if (msg.includes('Thiết bị chưa được đăng ký')) {
+        setActionMsg({ type: 'error', text: `${msg} → Vào trang /devices để đăng ký.` });
+      } else if (msg.toLowerCase().includes('reason')) {
+        setForceReason(true); setNoteError(msg);
+      } else {
+        setActionMsg({ type: 'error', text: msg });
+      }
     } finally {
       setLoadingShiftId(null);
     }
@@ -119,7 +128,7 @@ export function useCheckinCheckout({
     setActionMsg(null);
     if (!guardReason()) return;
     setLoadingShiftId(shiftId);
-    const payload = gpsPayload(shiftId);
+    const payload = await gpsPayload(shiftId);
     try {
       const result = await attendanceService.checkOut(payload);
       setLocationNote(''); setForceReason(false);
