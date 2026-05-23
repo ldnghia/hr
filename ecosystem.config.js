@@ -4,9 +4,14 @@ module.exports = {
       name: 'hr-backend',
       script: 'dist/src/main.js',
       cwd: '/home/phamhai/hr/hr_project/backend',
-      instances: 1,
+      instances: 2,
+      exec_mode: 'cluster',
       autorestart: true,
       watch: false,
+      // Zero-downtime reload: wait for process.send('ready') before routing traffic
+      wait_ready: true,
+      listen_timeout: 10000,
+      kill_timeout: 5000,
       env: {
         NODE_ENV: 'production',
         PORT: 3001,
@@ -21,9 +26,12 @@ module.exports = {
       script: 'node_modules/.bin/next',
       args: 'start --port 3000 --hostname 0.0.0.0',
       cwd: '/home/phamhai/hr/hr_project/frontend',
-      instances: 1,
+      instances: 2,
+      exec_mode: 'cluster',
       autorestart: true,
       watch: false,
+      // Next.js handles SIGTERM natively; no wait_ready (next start doesn't send ready signal)
+      kill_timeout: 5000,
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
