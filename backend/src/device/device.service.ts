@@ -5,25 +5,33 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SystemConfigService } from '../system-config/system-config.service';
 import { RegisterDeviceDto } from './dto/register-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { ListDevicesQueryDto } from './dto/list-devices-query.dto';
 
-const MAX_DEVICES_PER_EMPLOYEE = 2;
-
 @Injectable()
 export class DeviceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly systemConfig: SystemConfigService,
+  ) {}
+
+  private async getMaxDevices(): Promise<number> {
+    const val = await this.systemConfig.get('device_max_per_employee');
+    return val ? parseInt(val, 10) : 2;
+  }
 
   // ─── Employee self-service ────────────────────────────────────────────────
 
   async registerMine(employeeId: number, dto: RegisterDeviceDto, registeredById: number) {
+    const max = await this.getMaxDevices();
     const activeCount = await this.prisma.registeredDevice.count({
       where: { employeeId, isActive: true },
     });
-    if (activeCount >= MAX_DEVICES_PER_EMPLOYEE) {
+    if (activeCount >= max) {
       throw new BadRequestException(
-        `Đã đạt giới hạn ${MAX_DEVICES_PER_EMPLOYEE} thiết bị. Vui lòng vô hiệu hóa thiết bị cũ trước.`,
+        `Đã đạt giới hạn ${max} thiết bị. Vui lòng vô hiệu hóa thiết bị cũ trước.`,
       );
     }
 
@@ -98,12 +106,13 @@ export class DeviceService {
     dto: RegisterDeviceDto,
     registeredById: number,
   ) {
+    const max = await this.getMaxDevices();
     const activeCount = await this.prisma.registeredDevice.count({
       where: { employeeId, isActive: true },
     });
-    if (activeCount >= MAX_DEVICES_PER_EMPLOYEE) {
+    if (activeCount >= max) {
       throw new BadRequestException(
-        `Nhân viên đã đạt giới hạn ${MAX_DEVICES_PER_EMPLOYEE} thiết bị.`,
+        `Nhân viên đã đạt giới hạn ${max} thiết bị.`,
       );
     }
 

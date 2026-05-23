@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SystemConfigService } from '../system-config/system-config.service';
 
 export interface DeviceValidationResult {
   unknown: boolean;
@@ -7,7 +8,15 @@ export interface DeviceValidationResult {
 
 @Injectable()
 export class DeviceValidationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly systemConfig: SystemConfigService,
+  ) {}
+
+  private async isDeviceCheckEnabled(): Promise<boolean> {
+    const val = await this.systemConfig.get('device_check_enabled');
+    return val === 'true';
+  }
 
   /**
    * Validate device fingerprint on check-in.
@@ -20,6 +29,8 @@ export class DeviceValidationService {
     employeeId: number,
     deviceId?: string,
   ): Promise<DeviceValidationResult> {
+    if (!(await this.isDeviceCheckEnabled())) return { unknown: false };
+
     const emp = await this.prisma.employee.findUnique({
       where: { id: employeeId },
       select: { deviceValidationMode: true },
@@ -59,6 +70,8 @@ export class DeviceValidationService {
     employeeId: number,
     deviceId?: string,
   ): Promise<DeviceValidationResult> {
+    if (!(await this.isDeviceCheckEnabled())) return { unknown: false };
+
     const emp = await this.prisma.employee.findUnique({
       where: { id: employeeId },
       select: { deviceValidationMode: true },

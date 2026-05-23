@@ -12,6 +12,8 @@ export class SystemConfigService implements OnModuleInit {
       { key: 'telegram_reminder_time', value: '07:45', description: 'Daily late reminder time (HH:mm)' },
       { key: 'telegram_reminder_message', value: "Please don't forget to Clock-in on time!", description: 'Late reminder message' },
       { key: 'attendance_correction_monthly_limit', value: '3', description: 'Max attendance correction requests per employee per month' },
+      { key: 'device_max_per_employee', value: '2', description: 'Số thiết bị tối đa mỗi nhân viên được đăng ký' },
+      { key: 'device_check_enabled', value: 'false', description: 'Bật/tắt chế độ kiểm tra thiết bị khi chấm công' },
     ];
 
     for (const d of defaults) {

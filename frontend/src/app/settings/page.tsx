@@ -51,6 +51,8 @@ export default function SettingsPage() {
   if (loading) return <AppShell title={t('settings.title')}><PageSpinner /></AppShell>;
 
   const telegramConfigs = configs.filter(c => c.key.startsWith('telegram_'));
+  const deviceCheckEnabled = localValues['device_check_enabled'] === 'true';
+  const deviceMaxPerEmployee = localValues['device_max_per_employee'] ?? '2';
 
   return (
     <AppShell title={t('settings.title')}>
@@ -79,7 +81,7 @@ export default function SettingsPage() {
 
           <div className="divide-y divide-gray-100 p-6 space-y-6">
             {telegramConfigs.length === 0 && <p className="text-gray-500 text-sm italic">{t('settings.noTelegramConfig')}</p>}
-            
+
             {telegramConfigs.map((c) => (
               <div key={c.key} className="pt-6 first:pt-0 group">
                 <div className="flex flex-col sm:flex-row sm:items-end gap-4">
@@ -136,6 +138,100 @@ export default function SettingsPage() {
             <p className="mt-1 text-xs text-amber-700 leading-relaxed">
               {t('settings.reminderScheduleDesc')}
             </p>
+          </div>
+        </div>
+
+        {/* Device Configuration Card */}
+        <div>
+          <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600">
+            Cài đặt thiết bị
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">Quản lý giới hạn thiết bị và chế độ xác thực khi chấm công.</p>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-gray-200/50 bg-white/60 backdrop-blur-xl shadow-lg transition-all hover:shadow-emerald-500/10">
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+            <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-200">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 className="font-semibold text-gray-900">Thiết bị chấm công</h3>
+          </div>
+
+          <div className="divide-y divide-gray-100 p-6 space-y-6">
+            {/* Max devices per employee */}
+            <div className="group">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="flex-1 space-y-1.5">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    Số thiết bị tối đa
+                    <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 uppercase">device_max_per_employee</span>
+                  </label>
+                  <p className="text-xs text-gray-500">Số thiết bị tối đa mỗi nhân viên được phép đăng ký.</p>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={deviceMaxPerEmployee}
+                    onChange={(e) => setLocalValues(prev => ({ ...prev, device_max_per_employee: e.target.value }))}
+                    className="w-32 bg-gray-50/50 transition-all focus:bg-white"
+                  />
+                </div>
+                <Button
+                  variant="primary"
+                  size="md"
+                  loading={saving === 'device_max_per_employee'}
+                  onClick={() => handleUpdate('device_max_per_employee')}
+                  className="sm:w-24 shadow-sm hover:translate-y-[-1px] active:translate-y-[0px] transition-all"
+                >
+                  {t('common.update')}
+                </Button>
+              </div>
+            </div>
+
+            {/* Device check global toggle */}
+            <div className="pt-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex-1 space-y-1">
+                  <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    Bật chế độ kiểm tra thiết bị
+                    <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 uppercase">device_check_enabled</span>
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Khi bật, hệ thống sẽ kiểm tra thiết bị theo cấu hình từng nhân viên (STRICT / WARN). Khi tắt, tất cả chấm công được cho qua.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={deviceCheckEnabled}
+                  onClick={async () => {
+                    const newVal = (!deviceCheckEnabled).toString();
+                    setLocalValues(prev => ({ ...prev, device_check_enabled: newVal }));
+                    setSaving('device_check_enabled');
+                    setError('');
+                    try {
+                      await systemConfigService.update('device_check_enabled', newVal);
+                    } catch {
+                      setError('Failed to update device_check_enabled.');
+                      setLocalValues(prev => ({ ...prev, device_check_enabled: deviceCheckEnabled.toString() }));
+                    } finally {
+                      setSaving(null);
+                    }
+                  }}
+                  disabled={saving === 'device_check_enabled'}
+                  className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${deviceCheckEnabled ? 'bg-emerald-500' : 'bg-gray-200'} disabled:opacity-50`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${deviceCheckEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                  />
+                </button>
+              </div>
+              {saving === 'device_check_enabled' && (
+                <p className="mt-2 text-xs text-gray-400">Đang lưu...</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
