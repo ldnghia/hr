@@ -29,7 +29,9 @@ export class AttendanceQueryService {
 
   async findTodaySessions(employeeId: number) {
     const now = new Date();
-    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+    const nowVn = new Date(now.getTime() + VN_OFFSET_MS);
+    const today = new Date(Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate()));
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
     const todayStr = today.toISOString().split('T')[0];
 

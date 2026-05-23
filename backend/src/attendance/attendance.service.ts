@@ -19,7 +19,7 @@ import { CheckOutDto } from './dto/check-out.dto';
 import { AttendanceCheckinService } from './attendance-checkin.service';
 import { AttendanceQueryService } from './attendance-query.service';
 import { AttendanceExportService } from './attendance-export.service';
-import { computeSessionHours } from './helpers/session-hours';
+import { computeSessionHours, computeSessionDate } from './helpers/session-hours';
 import { Response } from 'express';
 
 @Injectable()
@@ -45,7 +45,7 @@ export class AttendanceService {
 
   async checkInOut(employeeId: number, type: 'check_in' | 'check_out', timestamp?: string) {
     const ts = timestamp ? new Date(timestamp) : new Date();
-    const dateOnly = new Date(Date.UTC(ts.getUTCFullYear(), ts.getUTCMonth(), ts.getUTCDate()));
+    const dateOnly = computeSessionDate(ts);
 
     let attendance = await this.prisma.attendance.findFirst({
       where: { employeeId, date: dateOnly },

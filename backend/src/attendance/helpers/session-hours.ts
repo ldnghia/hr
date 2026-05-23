@@ -22,15 +22,19 @@ export function computeSessionHours(
   return Math.max(0, parseFloat((rawHours - breakHours).toFixed(2)));
 }
 
+/** Vietnam timezone offset in milliseconds (UTC+7, fixed — no DST) */
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
 /**
  * Determine the session calendar date for a check-in timestamp.
  *
- * For cross-day shifts (e.g. 22:00–06:00), a check-in at 23:00 belongs to
- * the date of 23:00 (the start day), NOT the next calendar day.
- * Regular shifts: date is the UTC calendar date of the timestamp.
+ * Uses VN local time (UTC+7) to extract the calendar date, so early-morning
+ * check-ins (e.g. 06:46 VN = 23:46 UTC previous day) are attributed to the
+ * correct local date rather than the UTC date.
  */
 export function computeSessionDate(ts: Date): Date {
-  return new Date(Date.UTC(ts.getUTCFullYear(), ts.getUTCMonth(), ts.getUTCDate()));
+  const vnTs = new Date(ts.getTime() + VN_OFFSET_MS);
+  return new Date(Date.UTC(vnTs.getUTCFullYear(), vnTs.getUTCMonth(), vnTs.getUTCDate()));
 }
 
 /**
