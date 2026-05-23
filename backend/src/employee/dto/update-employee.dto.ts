@@ -85,6 +85,11 @@ export class UpdateEmployeeDto {
   @IsString()
   telegramId?: string;
 
+  @ApiPropertyOptional({ enum: ['DISABLED', 'WARNING', 'STRICT'], description: 'Device validation mode (admin only)' })
+  @IsOptional()
+  @IsIn(['DISABLED', 'WARNING', 'STRICT'])
+  deviceValidationMode?: 'DISABLED' | 'WARNING' | 'STRICT';
+
   @ApiPropertyOptional({ example: 12, description: 'Initial leave balance (admin/HR only)' })
   @IsOptional()
   @Type(() => Number)

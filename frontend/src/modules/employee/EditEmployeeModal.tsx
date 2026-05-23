@@ -18,6 +18,7 @@ interface EditEmployeeModalProps {
   employee: Employee;
   leaveBalance?: LeaveBalance | null;
   canEditBalance?: boolean;
+  isAdmin?: boolean;
   onSuccess: (updated: Employee, newBalance?: LeaveBalance) => void;
 }
 
@@ -35,13 +36,14 @@ interface FormState {
   telegramId: string;
   initialLeaveBalance: string;
   shiftId: string;
+  deviceValidationMode: string;
 }
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
-export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEditBalance = false, onSuccess }: EditEmployeeModalProps) {
+export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEditBalance = false, isAdmin = false, onSuccess }: EditEmployeeModalProps) {
   const { t } = useTranslation();
-  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '', shiftId: '' });
+  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '', shiftId: '', deviceValidationMode: 'DISABLED' });
   const [errors, setErrors]     = useState<FormErrors>({});
   const [apiError, setApiError] = useState('');
   const [saving, setSaving]     = useState(false);
@@ -75,6 +77,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
       telegramId:          employee.telegramId         ?? '',
       initialLeaveBalance: String(leaveBalance?.total ?? ''),
       shiftId:             String(employee.shiftId     ?? ''),
+      deviceValidationMode: employee.deviceValidationMode ?? 'DISABLED',
     });
     setErrors({});
     setApiError('');
@@ -186,8 +189,9 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
         departmentId: form.departmentId ? Number(form.departmentId) : undefined,
         positionId:   form.positionId   ? Number(form.positionId)   : undefined,
         managerId:    form.managerId    ? Number(form.managerId)     : undefined,
-        telegramId:   form.telegramId || undefined,
-        shiftId:      form.shiftId     ? Number(form.shiftId)       : null,
+        telegramId:           form.telegramId || undefined,
+        shiftId:              form.shiftId ? Number(form.shiftId) : null,
+        ...(isAdmin && { deviceValidationMode: form.deviceValidationMode as 'DISABLED' | 'WARNING' | 'STRICT' }),
       });
 
       let newBalance: LeaveBalance | undefined;
@@ -372,6 +376,28 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
             </div>
           )}
         </fieldset>
+
+        {/* ── Device Validation (admin only) ────────────────── */}
+        {isAdmin && (
+          <>
+            <hr className="border-gray-100" />
+            <fieldset className="space-y-4">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Thiết bị chấm công
+              </legend>
+              <Select
+                label="Chế độ kiểm tra thiết bị"
+                value={form.deviceValidationMode}
+                onChange={(e) => set('deviceValidationMode', e.target.value)}
+                options={[
+                  { value: 'DISABLED', label: 'Tắt — Không kiểm tra' },
+                  { value: 'WARNING',  label: 'Cảnh báo — Cho qua nhưng ghi nhận' },
+                  { value: 'STRICT',   label: 'Nghiêm ngặt — Chặn nếu thiết bị lạ' },
+                ]}
+              />
+            </fieldset>
+          </>
+        )}
 
         <div className="flex justify-end gap-3 pt-1">
           <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>

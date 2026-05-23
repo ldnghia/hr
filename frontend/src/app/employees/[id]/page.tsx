@@ -161,6 +161,7 @@ export default function EmployeeDetailPage() {
           employee={employee}
           leaveBalance={leaveBalance}
           canEditBalance={canEdit}
+          isAdmin={user?.role === 'admin'}
           onSuccess={(updated, newBalance) => {
             setEmployee(updated);
             if (newBalance !== undefined) setLeaveBalance(newBalance);
