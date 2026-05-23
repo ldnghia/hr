@@ -8,6 +8,7 @@
     "dev:proxy": "node https-proxy.mjs",
     "certs": "bash scripts/gen-cert.sh",
     "clean": "rm -rf .next",
+    "prebuild": "node scripts/generate-version.js",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
