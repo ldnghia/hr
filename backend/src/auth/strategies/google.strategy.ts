@@ -17,8 +17,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       console.warn('[GoogleStrategy] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set — Google login disabled');
     }
     super({
-      clientID,
-      clientSecret,
+      clientID: clientID || 'disabled',
+      clientSecret: clientSecret || 'disabled',
       callbackURL: process.env.GOOGLE_CALLBACK_URL,
       scope: ['email', 'profile'],
     });
