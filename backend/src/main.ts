@@ -89,12 +89,36 @@ async function bootstrap() {
 
   const port = parseInt(process.env.PORT ?? '3000', 10);
   const lanIP = getLanIP();
+
+  app.enableShutdownHooks();
   await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 Local:   http://localhost:${port}/api/v1`);
   logger.log(`🌐 Network: http://${lanIP}:${port}/api/v1`);
   logger.log(`🌍 Domain:  http://dcorp.vn:3000 → proxied via Next.js`);
   logger.log(`📚 Swagger: http://localhost:${port}/api/docs`);
+
+  // Signal PM2 cluster mode that this instance is ready to receive traffic
+  if (process.send) {
+    process.send('ready');
+    logger.log('PM2 ready signal sent');
+  }
+
+  // Graceful shutdown — PM2 sends SIGTERM (Linux) or SIGINT (Windows)
+  const shutdown = async (signal: string) => {
+    logger.log(`${signal} received — shutting down gracefully...`);
+    try {
+      await app.close();
+      logger.log('Application closed cleanly');
+      process.exit(0);
+    } catch (err) {
+      logger.error('Error during shutdown', err);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
 }
 
 bootstrap();

@@ -22,6 +22,7 @@ import { AttendanceCorrectionModule } from './attendance-correction/attendance-c
 import { ShiftAssignmentModule } from './shift-assignment/shift-assignment.module';
 import { ShiftScheduleModule } from './shift-schedule/shift-schedule.module';
 import { DeviceModule } from './device/device.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { DeviceModule } from './device/device.module';
     ShiftAssignmentModule,
     ShiftScheduleModule,
     DeviceModule,
+    HealthModule,
   ],
 })
 export class AppModule {}
