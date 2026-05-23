@@ -6,10 +6,15 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend.yml'
+      - 'ecosystem.config.js'
   pull_request:
     branches: [main, develop]
     paths:
       - 'frontend/**'
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -52,7 +57,23 @@ jobs:
           npm ci
           npm run build
 
-      - name: Restart PM2
+      - name: Reload PM2 (zero-downtime)
         run: |
-          pm2 restart hr-frontend || pm2 start npm --name hr-frontend --cwd /home/phamhai/hr/hr_project/frontend -- start
+          cd /home/phamhai/hr/hr_project
+          pm2 reload ecosystem.config.js --only hr-frontend --update-env || pm2 start ecosystem.config.js --only hr-frontend
           pm2 save
+
+      - name: Smoke test frontend
+        run: |
+          for i in {1..30}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || echo "000")
+            if [ "$code" = "200" ] || [ "$code" = "307" ] || [ "$code" = "302" ]; then
+              echo "Frontend healthy (HTTP $code)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $code — retrying..."
+            sleep 1
+          done
+          echo "Frontend smoke test failed after 30s"
+          pm2 logs hr-frontend --lines 30 --nostream
+          exit 1
