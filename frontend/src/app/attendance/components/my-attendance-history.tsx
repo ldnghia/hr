@@ -59,7 +59,7 @@ export function MyAttendanceHistory({ isAdminOrHr, onAdminEditSuccess }: MyAtten
             {records?.data.map((rec) => (
               <div key={rec.id} className="px-4 py-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-gray-800 text-sm">{formatDate(rec.date)}</span>
+                  <span className="font-semibold text-gray-800 text-sm">{formatDate(rec.checkinTime ?? rec.date)}</span>
                   <span className="font-bold text-indigo-600 text-sm">{formatHours(rec.workingHours)}</span>
                 </div>
                 {rec.shift && (

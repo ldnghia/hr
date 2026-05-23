@@ -122,8 +122,8 @@ function MiniCalendar({ cells, year, month, todayDay }: {
             key={cell.dateStr}
             className="flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-[11px]"
             style={{
-              background: C[cell.status].bg,
-              color: C[cell.status].color,
+              background: C[cell.status === 'ot' ? 'ok' : cell.status].bg,
+              color: C[cell.status === 'ot' ? 'ok' : cell.status].color,
               boxShadow: isToday ? `inset 0 0 0 2px oklch(55% 0.13 200)` : undefined,
               opacity: cell.status === 'future' ? 0.5 : 1,
             }}
@@ -147,7 +147,7 @@ function DailyLog({ cells, month, todayDay }: {
       <table className="w-full border-separate border-spacing-0 text-[12.5px]">
         <thead>
           <tr>
-            {['Ngày','Thứ','Trạng thái','Vào','Ra','Trễ','Sớm','OT','Ghi chú','Yêu cầu'].map((h) => (
+            {['Ngày','Thứ','Trạng thái','Vào','Ra','Tổng giờ','Trễ','Sớm','Ghi chú','Yêu cầu'].map((h) => (
               <th key={h}
                 className="sticky top-0 z-[2] border-b border-gray-100 bg-gray-50 px-3.5 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-gray-400">
                 {h}
@@ -170,7 +170,7 @@ function DailyLog({ cells, month, todayDay }: {
                   {DOW_VI[cell.dow]}
                 </td>
                 <td className="border-b border-gray-50 px-3.5 py-2.5">
-                  <StatusBadge status={cell.status} />
+                  <StatusBadge status={cell.status === 'ot' ? 'ok' : cell.status} />
                   <SecondaryBadges cell={cell} />
                 </td>
                 <td className="border-b border-gray-50 px-3.5 py-2.5 font-mono text-gray-700">
@@ -178,6 +178,10 @@ function DailyLog({ cells, month, todayDay }: {
                 </td>
                 <td className="border-b border-gray-50 px-3.5 py-2.5 font-mono text-gray-700">
                   {cell.checkoutTime ?? <span className="text-gray-300">—</span>}
+                </td>
+                <td className="border-b border-gray-50 px-3.5 py-2.5 font-mono"
+                  style={{ color: (cell.workingHours ?? 0) > 0 ? 'oklch(44% 0.16 152)' : '#d1d5db' }}>
+                  {(cell.workingHours ?? 0) > 0 ? `${cell.workingHours}h` : '—'}
                 </td>
                 <td className="border-b border-gray-50 px-3.5 py-2.5">
                   {(cell.lateMinutes ?? 0) > 0
@@ -190,10 +194,6 @@ function DailyLog({ cells, month, todayDay }: {
                     ? <span className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
                         style={{ background: C.early.bg, color: C.early.color }}>{cell.earlyMinutes}p</span>
                     : <span className="text-gray-300">—</span>}
-                </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5 font-mono"
-                  style={{ color: (cell.otHours ?? 0) > 0 ? C.ot.color : '#d1d5db' }}>
-                  {(cell.otHours ?? 0) > 0 ? `${cell.otHours}h` : '—'}
                 </td>
                 <td className="border-b border-gray-50 px-3.5 py-2.5 text-gray-500">
                   {cell.note || <span className="text-gray-300">—</span>}
@@ -393,7 +393,7 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
           </div>
           <div className="p-4 grid grid-cols-2 gap-2">
             {(Object.entries(STATUS_META) as [CellStatus, typeof STATUS_META[CellStatus]][])
-              .filter(([s]) => !['future','off'].includes(s))
+              .filter(([s]) => !['future','off','ot'].includes(s))
               .map(([s, meta]) => (
                 <div key={s} className="flex items-center gap-2.5">
                   <span className="h-7 w-7 shrink-0 rounded-lg flex items-center justify-center font-mono text-[10px] font-semibold"

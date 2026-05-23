@@ -51,11 +51,18 @@ function buildEmployeeRows(
   const daysInMonth = new Date(year, month, 0).getDate();
   const todayMs = TODAY.getTime();
 
+  // Derive VN calendar date (UTC+7) from a UTC timestamp string
+  const vnDateStr = (isoStr: string): string => {
+    const vnTs = new Date(new Date(isoStr).getTime() + 7 * 60 * 60 * 1000);
+    return `${vnTs.getUTCFullYear()}-${String(vnTs.getUTCMonth() + 1).padStart(2, '0')}-${String(vnTs.getUTCDate()).padStart(2, '0')}`;
+  };
+
   // Index records: employeeId → dateStr → all records (supports multi-shift per day)
+  // Use VN date of checkinTime (authoritative) to avoid UTC midnight day-boundary shift.
   const recMap = new Map<number, Map<string, AttendanceRecord[]>>();
   for (const r of records) {
-    if (!r.date) continue;
-    const ds = r.date.split('T')[0]; // YYYY-MM-DD
+    const ds = r.checkinTime ? vnDateStr(r.checkinTime) : r.date?.split('T')[0];
+    if (!ds) continue;
     if (!recMap.has(r.employeeId)) recMap.set(r.employeeId, new Map());
     const dayMap = recMap.get(r.employeeId)!;
     if (!dayMap.has(ds)) dayMap.set(ds, []);
@@ -162,12 +169,12 @@ function buildEmployeeRows(
           const ci = r.checkinTime ? new Date(r.checkinTime) : null;
           const co = r.checkoutTime ? new Date(r.checkoutTime) : null;
           let late = 0;
-          if (s === 'late' && ci && r.shift?.startTime) {
+          if (ci && r.shift?.startTime) {
             const [sh, sm] = r.shift.startTime.split(':').map(Number);
             late = Math.max(0, ci.getHours() * 60 + ci.getMinutes() - (sh * 60 + sm));
           }
           let early = 0;
-          if (s === 'early' && co && r.shift?.endTime) {
+          if (co && r.shift?.endTime) {
             const [eh, em] = r.shift.endTime.split(':').map(Number);
             early = Math.max(0, eh * 60 + em - (co.getHours() * 60 + co.getMinutes()));
           }
@@ -349,8 +356,11 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
         organizationService.departments(),
         correctionService.list({ limit: 500 }),
         // Only SHIFT (Command Center) needs per-day schedule count for "Số ca đã phân"
+        // Employee role: use /me endpoint (list endpoint is admin/hr/manager only)
         workingMode === 'SHIFT'
-          ? shiftScheduleService.list({ year, month, ...(scopeDeptId ? { departmentId: scopeDeptId } : {}) })
+          ? (scopeEmpId
+              ? shiftScheduleService.listMine(year, month)
+              : shiftScheduleService.list({ year, month, ...(scopeDeptId ? { departmentId: scopeDeptId } : {}) }))
           : Promise.resolve([]),
       ]);
 

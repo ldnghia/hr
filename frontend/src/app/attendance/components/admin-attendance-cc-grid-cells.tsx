@@ -26,37 +26,44 @@ const INCOMPLETE_COLOR = 'oklch(46% 0.15 75)';
 
 /** Cell background/color — priority matches glyph: Đủ giờ → Đi trễ → Về sớm → Chưa checkout → status */
 function cellStyle(shift: ShiftEntry): { background: string; color: string } {
-  const { status, hasNoCheckout, workingHours, normalHours, checkinTime } = shift;
+  const { status, hasNoCheckout, workingHours, normalHours, checkinTime, lateMinutes } = shift;
   const isSufficient = !!checkinTime && !hasNoCheckout && (
     (normalHours ?? 0) > 0
       ? (workingHours ?? 0) >= (normalHours ?? 0)
       : status === 'ok' || status === 'ot'
   );
-  if (isSufficient)       return { background: SUFFICIENT_BG,           color: SUFFICIENT_COLOR           };
-  if (status === 'late')  return { background: CELL_STYLE.late.bg,       color: CELL_STYLE.late.color       };
-  if (status === 'early') return { background: CELL_STYLE.early.bg,      color: CELL_STYLE.early.color      };
-  if (hasNoCheckout)      return { background: INCOMPLETE_BG,            color: INCOMPLETE_COLOR            };
-  const cs = CELL_STYLE[status] ?? CELL_STYLE.ok;
-  return { background: cs.bg, color: cs.color };
+  if (isSufficient)                             return { background: SUFFICIENT_BG,          color: SUFFICIENT_COLOR          };
+  if (status === 'late' || (lateMinutes ?? 0) > 0) return { background: CELL_STYLE.late.bg,  color: CELL_STYLE.late.color     };
+  if (status === 'early')                       return { background: CELL_STYLE.early.bg,    color: CELL_STYLE.early.color    };
+  if (hasNoCheckout)                            return { background: INCOMPLETE_BG,          color: INCOMPLETE_COLOR          };
+  const cs = CELL_STYLE[status];
+  if (cs) return { background: cs.bg, color: cs.color };
+  // checkin exists but status unrecognised — treat as insufficient
+  if (checkinTime) return { background: INCOMPLETE_BG, color: INCOMPLETE_COLOR };
+  return { background: CELL_STYLE.ok.bg, color: CELL_STYLE.ok.color };
 }
 
-/** Icon for a shift entry — priority: Đủ giờ → Đi trễ → Về sớm → Chưa checkout → Vắng */
+/** Icon for a shift entry — priority: Đủ giờ → Đi trễ → Về sớm → Chưa checkout → Thiếu giờ → Vắng */
 function cellGlyph(shift: ShiftEntry): React.ReactNode {
-  const { status, hasNoCheckout, workingHours, normalHours, checkinTime } = shift;
+  const { status, hasNoCheckout, workingHours, normalHours, checkinTime, lateMinutes } = shift;
   const isSufficient = !!checkinTime && !hasNoCheckout && (
     (normalHours ?? 0) > 0
       ? (workingHours ?? 0) >= (normalHours ?? 0)
       : status === 'ok' || status === 'ot'
   );
-  if (isSufficient)             return <span className="text-[15px] leading-none font-bold">✓</span>;
-  if (status === 'late')        return <span>!</span>;
-  if (status === 'early')       return <span className="text-[12px]">↩</span>;
-  if (hasNoCheckout)            return <span className="text-[12px] font-bold">?</span>;
-  if (status === 'absent')      return <span>✗</span>;
-  if (status === 'annual')      return <span>P</span>;
-  if (status === 'unpaid')      return <span>KL</span>;
-  if (status === 'special')     return <span>ĐB</span>;
-  if (status === 'holiday')     return <span>L</span>;
+  const isInsufficient = !!checkinTime && !hasNoCheckout && (normalHours ?? 0) > 0
+    && (workingHours ?? 0) < (normalHours ?? 0);
+
+  if (isSufficient)                                  return <span className="text-[15px] leading-none font-bold">✓</span>;
+  if (status === 'late' || (lateMinutes ?? 0) > 0)   return <span>!</span>;
+  if (status === 'early')                            return <span className="text-[12px]">↩</span>;
+  if (hasNoCheckout)                                 return <span className="text-[12px] font-bold">?</span>;
+  if (isInsufficient)                                return <span>!</span>;
+  if (status === 'absent')                           return <span>✗</span>;
+  if (status === 'annual')                           return <span>P</span>;
+  if (status === 'unpaid')                           return <span>KL</span>;
+  if (status === 'special')                          return <span>ĐB</span>;
+  if (status === 'holiday')                          return <span>L</span>;
   return <span style={{ opacity: 0.4 }}>·</span>;
 }
 
@@ -75,8 +82,6 @@ function shiftStatusStyle(shift: ShiftEntry): { background: string; color: strin
     : { background: 'oklch(60% 0.15 75 / 0.18)',  color: 'oklch(46% 0.15 75)'  };
 }
 
-// OT dot — amber accent on green cell to signal overtime
-const OT_DOT = 'oklch(60% 0.17 45)';
 
 // ─── Tooltip ─────────────────────────────────────────────────────────────────
 
@@ -204,17 +209,12 @@ export function CcTooltip({ data }: { data: CcTooltipData }) {
 
 function ShiftBadge({ shift, rounded }: { shift: ShiftEntry; rounded: string }) {
   const style = cellStyle(shift);
-  const isOt  = shift.status === 'ot';
   return (
     <div
       className={`h-4 flex shrink-0 items-center justify-center font-mono text-[9px] font-bold relative ${rounded}`}
       style={{ background: style.background, color: style.color }}
     >
       {cellGlyph(shift)}
-      {isOt && (
-        <span className="absolute right-[1px] top-[1px] h-1 w-1 rounded-full"
-          style={{ background: OT_DOT }} />
-      )}
       {shift.correctionStatus && (
         <span className="absolute top-[1px] left-[1px] h-1 w-1 rounded-full shadow-[0_0_0_1px_white]"
           style={{ background: 'oklch(58% 0.16 295)' }} />
@@ -285,8 +285,6 @@ export function CcCell({ cell, dow, onMouseEnter, onMouseLeave }: CcCellProps) {
   // Single shift — same icon set as fixed-schedule grid, no S/C/D codes
   const s     = shifts[0];
   const style = cellStyle(s);
-  const isOt  = s.status === 'ot';
-
   return (
     <td
       className="day-cell w-12 min-w-[48px] p-0.5"
@@ -299,10 +297,6 @@ export function CcCell({ cell, dow, onMouseEnter, onMouseLeave }: CcCellProps) {
         style={{ background: style.background, color: style.color }}
       >
         {cellGlyph(s)}
-        {isOt && (
-          <span className="absolute right-[2px] top-[2px] h-1.5 w-1.5 rounded-full shadow-[0_0_0_1px_white]"
-            style={{ background: OT_DOT }} />
-        )}
         {(cell.isCorrected || (s.correctionStatus ?? cell.correctionStatus)) && (
           <span className="absolute top-[2px] left-[2px] h-1.5 w-1.5 rounded-full shadow-[0_0_0_1px_white]"
             style={{ background: 'oklch(58% 0.16 295)' }} />

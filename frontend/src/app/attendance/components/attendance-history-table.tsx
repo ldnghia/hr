@@ -65,7 +65,7 @@ export function AttendanceHistoryTable({
         <tbody className="divide-y divide-gray-50">
           {records.map((rec) => (
             <tr key={rec.id} className="hover:bg-gray-50 transition-colors">
-              <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(rec.date)}</td>
+              <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(rec.checkinTime ?? rec.date)}</td>
               <td className="px-6 py-3 text-gray-500 text-xs hidden md:table-cell">
                 {rec.shift ? rec.shift.name : '—'}
                 {rec.shift && <span className="block text-gray-400">{rec.shift.startTime}–{rec.shift.endTime}</span>}

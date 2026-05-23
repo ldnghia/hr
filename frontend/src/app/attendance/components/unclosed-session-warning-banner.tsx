@@ -54,7 +54,7 @@ export function UnclosedSessionWarningBanner({ sessions, loadingShiftId, onCheck
                   {s.shift?.name ?? `Ca #${shiftId}`}
                 </p>
                 <p className="text-xs text-gray-400">
-                  {fmtDate(s.date)} · vào {s.checkinTime ? fmtTime(s.checkinTime) : '—'}
+                  {fmtDate(s.checkinTime ?? s.date)} · vào {s.checkinTime ? fmtTime(s.checkinTime) : '—'}
                 </p>
               </div>
               <button
