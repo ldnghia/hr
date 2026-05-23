@@ -106,7 +106,7 @@ model Employee {
   createdShiftSchedules EmployeeShiftSchedule[]  @relation("ScheduleCreatedBy")
   dayOffs              EmployeeDayOff[]          @relation("EmployeeToDayOff")
   createdDayOffs       EmployeeDayOff[]          @relation("DayOffCreatedBy")
-  deviceValidationMode String                    @default("STRICT") @map("device_validation_mode")
+  deviceValidationMode String                    @default("DISABLED") @map("device_validation_mode")
   registeredDevices    RegisteredDevice[]        @relation("EmployeeToDevices")
   registeredDevicesByMe RegisteredDevice[]       @relation("DeviceRegisteredBy")
 

@@ -24,7 +24,7 @@ export class DeviceValidationService {
       where: { id: employeeId },
       select: { deviceValidationMode: true },
     });
-    const mode = emp?.deviceValidationMode ?? 'STRICT';
+    const mode = emp?.deviceValidationMode ?? 'DISABLED';
 
     if (mode === 'DISABLED') return { unknown: false };
 
@@ -63,7 +63,7 @@ export class DeviceValidationService {
       where: { id: employeeId },
       select: { deviceValidationMode: true },
     });
-    const mode = emp?.deviceValidationMode ?? 'STRICT';
+    const mode = emp?.deviceValidationMode ?? 'DISABLED';
 
     if (mode === 'DISABLED' || !deviceId) return { unknown: false };
 
