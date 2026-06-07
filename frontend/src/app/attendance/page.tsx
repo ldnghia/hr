@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '@/components/layout/AppShell';
 import { Alert } from '@/components/ui/Alert';
@@ -35,6 +35,7 @@ export default function AttendancePage() {
   const geo = useGeolocation();
 
   const { sessions, loading: sessionsLoading, refetch: refetchSessions } = useTodaySessions();
+  const [historyKey, setHistoryKey] = useState(0);
   const { shifts, loading: shiftsLoading } = useCurrentMonthShifts();
   const { unclosed, refetch: refetchUnclosed } = useUnclosedSessions();
 
@@ -102,6 +103,12 @@ export default function AttendancePage() {
     if (geo.status === 'success') { setLocationNote(''); setNoteError(''); setForceReason(false); }
   }, [geo.status]);
 
+  // Wrap refetchSessions to also reload attendance history after check-in/out
+  const refetchSessionsAndHistory = useCallback(async () => {
+    await refetchSessions();
+    setHistoryKey((k) => k + 1);
+  }, [refetchSessions]);
+
   // Check-in / check-out actions
   const {
     loadingShiftId, actionMsg,
@@ -118,7 +125,7 @@ export default function AttendancePage() {
     setConfirmedOffice,
     setConfirmedBranch,
     setLocationSource,
-    refetchSessions,
+    refetchSessions: refetchSessionsAndHistory,
   });
 
   // Mark unclosed sessions as "forgot checkout" — leaves checkoutTime empty
@@ -204,7 +211,7 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            <MyAttendanceHistory isAdminOrHr={isAdminOrHr} />
+            <MyAttendanceHistory isAdminOrHr={isAdminOrHr} refreshKey={historyKey} />
           </>
         )}
 

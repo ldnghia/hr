@@ -101,7 +101,19 @@ function buildEmployeeRows(
         cell = { dateStr: ds, day: d, dow, status, holidayName };
       } else if (holidayName) {
         status = 'holiday';
-        cell = { dateStr: ds, day: d, dow, status, holidayName, note: holidayName };
+        cell = {
+          dateStr: ds, day: d, dow, status, holidayName, note: holidayName,
+          checkinNote: rec?.checkinNote ?? null,
+          checkoutNote: rec?.checkoutNote ?? null,
+          locationNote: rec?.locationNote ?? null,
+          correctionReason: rec?.corrections?.[0]?.reason ?? null,
+          correctionReviewNote: rec?.corrections?.[0]?.reviewNote ?? null,
+          checkinTime: fmtT(rec?.checkinTime),
+          checkoutTime: fmtT(rec?.checkoutTime),
+          attendanceId: rec?.id,
+          isCorrected: rec?.isCorrected,
+          correctionStatus: rec?.id ? corrMap.get(rec.id) : undefined,
+        };
       } else if (!isShift && isWeekend) {
         // Fixed-schedule employees: weekend off unless they have a record
         status = rec ? deriveCellStatus(rec) : 'off';
@@ -111,6 +123,14 @@ function buildEmployeeRows(
           checkoutTime: fmtT(rec?.checkoutTime),
           otHours: rec?.overtimeHours ? parseFloat(String(rec.overtimeHours)) : 0,
           attendanceId: rec?.id,
+          // Include notes even for weekend records
+          checkinNote: rec?.checkinNote ?? null,
+          checkoutNote: rec?.checkoutNote ?? null,
+          locationNote: rec?.locationNote ?? null,
+          correctionReason: rec?.corrections?.[0]?.reason ?? null,
+          correctionReviewNote: rec?.corrections?.[0]?.reviewNote ?? null,
+          isCorrected: rec?.isCorrected,
+          correctionStatus: rec?.id ? corrMap.get(rec.id) : undefined,
         };
       } else if (rec) {
         status = deriveCellStatus(rec);
@@ -121,12 +141,14 @@ function buildEmployeeRows(
 
         if (ci && rec.shift?.startTime) {
           const [sh, sm] = rec.shift.startTime.split(':').map(Number);
-          lateMinutes = Math.max(0, ci.getHours() * 60 + ci.getMinutes() - (sh * 60 + sm));
+          const grace = rec.shift.graceLateMinutes ?? 0;
+          lateMinutes = Math.max(0, ci.getHours() * 60 + ci.getMinutes() - (sh * 60 + sm) - grace);
         }
         let earlyMinutes = 0;
         if (co && rec.shift?.endTime) {
           const [eh, em] = rec.shift.endTime.split(':').map(Number);
-          earlyMinutes = Math.max(0, eh * 60 + em - (co.getHours() * 60 + co.getMinutes()));
+          const grace = rec.shift.graceEarlyMinutes ?? 0;
+          earlyMinutes = Math.max(0, eh * 60 + em - (co.getHours() * 60 + co.getMinutes()) - grace);
         }
 
         const otH = rec.overtimeHours ? parseFloat(String(rec.overtimeHours)) : 0;
@@ -142,6 +164,11 @@ function buildEmployeeRows(
           correctionStatus: rec.id ? corrMap.get(rec.id) : undefined,
           isCorrected: rec.isCorrected,
           isInOffice: rec.isInOffice,
+          checkinNote: rec.checkinNote ?? null,
+          checkoutNote: rec.checkoutNote ?? null,
+          locationNote: rec.locationNote ?? null,
+          correctionReason: rec.corrections?.[0]?.reason ?? null,
+          correctionReviewNote: rec.corrections?.[0]?.reviewNote ?? null,
         };
 
         if (status === 'late')   { lateDays++; totalLateMin += lateMinutes; }
@@ -372,10 +399,11 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
       if (deptRes.status === 'fulfilled') setDepartments(deptRes.value ?? []);
       if (corrRes.status === 'fulfilled') {
         const rawCorr = corrRes.value;
-        // Guard: backend may return plain array OR paginated { data: [...] }
-        const corrections: { status: string; attendanceId: number }[] = Array.isArray(rawCorr)
-          ? rawCorr
-          : Array.isArray(rawCorr?.data) ? rawCorr.data : [];
+        // Backend returns { data: { items: [], total, page, limit }, ... }
+        const corrections: { status: string; attendanceId: number }[] =
+          Array.isArray(rawCorr)            ? rawCorr :
+          Array.isArray(rawCorr?.data)      ? rawCorr.data :
+          Array.isArray(rawCorr?.data?.items) ? rawCorr.data.items : [];
         const map = new Map<number, CorrectionStatus>();
         for (const c of corrections) {
           if (c.status === 'cancelled') continue;

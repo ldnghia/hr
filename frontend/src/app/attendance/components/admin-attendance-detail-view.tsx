@@ -195,8 +195,29 @@ function DailyLog({ cells, month, todayDay }: {
                         style={{ background: C.early.bg, color: C.early.color }}>{cell.earlyMinutes}p</span>
                     : <span className="text-gray-300">—</span>}
                 </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5 text-gray-500">
-                  {cell.note || <span className="text-gray-300">—</span>}
+                <td className="border-b border-gray-50 px-3.5 py-2.5 max-w-[200px]">
+                  {(() => {
+                    const notes: { label: string; text: string }[] = [];
+                    if (cell.note)                 notes.push({ label: '', text: cell.note });
+                    if (cell.checkinNote)          notes.push({ label: 'Vào', text: cell.checkinNote });
+                    if (cell.checkoutNote)         notes.push({ label: 'Ra', text: cell.checkoutNote });
+                    if (cell.locationNote)         notes.push({ label: 'Địa điểm', text: cell.locationNote });
+                    if (cell.correctionReason)     notes.push({ label: 'Lý do ĐC', text: cell.correctionReason });
+                    if (cell.correctionReviewNote) notes.push({ label: 'Ghi chú duyệt', text: cell.correctionReviewNote });
+                    if (notes.length === 0) return <span className="text-gray-300">—</span>;
+                    return (
+                      <div className="space-y-0.5">
+                        {notes.map(({ label, text }, i) => (
+                          <p key={i} className="text-[11.5px] text-gray-600 leading-snug">
+                            {label && (
+                              <span className="font-semibold text-gray-400 mr-1">{label}:</span>
+                            )}
+                            {text}
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="border-b border-gray-50 px-3.5 py-2.5">
                   {cell.correctionStatus === 'pending' && (

@@ -29,15 +29,25 @@ export class AttendanceCorrectionLimitService {
     return this.cachedLimit;
   }
 
-  /** Throws BadRequestException if employee has reached monthly limit */
+  /** Throws BadRequestException if employee has reached monthly limit.
+   *  SHIFT employees are exempt — they have per-record protection instead
+   *  (cannot create a second pending correction for the same attendance record). */
   async assertWithinLimit(employeeId: number, tx?: PrismaService): Promise<void> {
     const db = tx ?? this.prisma;
+
+    // Check working mode — SHIFT employees skip the monthly cap
+    const emp = await (db as any).employee.findUnique({
+      where: { id: employeeId },
+      select: { workingMode: true },
+    });
+    if (emp?.workingMode === 'SHIFT') return;
+
     const limit = await this.getLimit();
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    const count = await db.attendanceCorrectionRequest.count({
+    const count = await (db as any).attendanceCorrectionRequest.count({
       where: {
         employeeId,
         status: { in: [CORRECTION_STATUS.PENDING, CORRECTION_STATUS.APPROVED] },

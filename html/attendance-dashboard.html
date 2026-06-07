@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DMAS – Bảng Công Dcorp</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0c0f14;
+  --bg2: #141820;
+  --bg3: #1a1f2b;
+  --bg4: #222836;
+  --border: #2a3040;
+  --border2: #353d50;
+  --text: #e8ecf4;
+  --text2: #9aa3b8;
+  --text3: #636d82;
+  --accent: #4e8cff;
+  --accent2: #3a6fd8;
+
+  --ok: #22c55e;
+  --ok-bg: rgba(34,197,94,.15);
+  --late: #ef4444;
+  --late-bg: rgba(239,68,68,.15);
+  --early: #94a3b8;
+  --early-bg: rgba(148,163,184,.15);
+  --annual: #eab308;
+  --annual-bg: rgba(234,179,8,.15);
+  --unpaid: #a16207;
+  --unpaid-bg: rgba(161,98,7,.15);
+  --special: #3b82f6;
+  --special-bg: rgba(59,130,246,.15);
+  --holiday: #c084fc;
+  --holiday-bg: rgba(192,132,252,.15);
+  --ot: #f97316;
+  --ot-bg: rgba(249,115,22,.15);
+  --absent: #f43f5e;
+  --absent-bg: rgba(244,63,94,.15);
+  --weekend: rgba(255,255,255,.03);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── HEADER ─── */
+.header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  backdrop-filter: blur(20px);
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.logo {
+  font-size: 20px; font-weight: 700; color: var(--accent);
+  letter-spacing: -0.5px;
+}
+.logo span { color: var(--text3); font-weight: 400; font-size: 14px; margin-left: 8px; }
+.header-controls { display: flex; align-items: center; gap: 12px; }
+.month-nav {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 8px;
+}
+.month-nav button {
+  background: none; border: none; color: var(--text2);
+  cursor: pointer; width: 30px; height: 30px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; transition: all .15s;
+}
+.month-nav button:hover { background: var(--bg4); color: var(--text); }
+.month-label {
+  font-weight: 600; font-size: 15px; min-width: 140px;
+  text-align: center; color: var(--text);
+}
+
+/* ─── LEGEND ─── */
+.legend-bar {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 10px 28px; display: flex; align-items: center; gap: 16px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text2);
+}
+.legend-dot {
+  width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+}
+
+/* ─── GRID DASHBOARD ─── */
+.grid-container {
+  padding: 20px 28px;
+  overflow-x: auto;
+}
+.grid-title {
+  font-size: 16px; font-weight: 600; margin-bottom: 14px;
+  color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.grid-title .badge {
+  font-size: 11px; font-weight: 600; background: var(--accent);
+  color: #fff; padding: 2px 8px; border-radius: 20px;
+}
+
+.att-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 12px;
+}
+.att-grid th, .att-grid td {
+  border: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Fixed column */
+.att-grid th.name-col, .att-grid td.name-col {
+  position: sticky; left: 0; z-index: 10;
+  background: var(--bg2); min-width: 180px; max-width: 180px;
+  text-align: left; padding: 0 12px;
+  border-right: 2px solid var(--border2);
+}
+.att-grid th.code-col, .att-grid td.code-col {
+  position: sticky; left: 180px; z-index: 10;
+  background: var(--bg2); min-width: 70px; max-width: 70px;
+  border-right: 2px solid var(--border2);
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--text3);
+}
+.att-grid thead th {
+  background: var(--bg3); color: var(--text2);
+  font-weight: 600; font-size: 11px;
+  padding: 4px 2px; position: sticky; top: 0; z-index: 20;
+}
+.att-grid thead th.name-col,
+.att-grid thead th.code-col { z-index: 30; }
+.day-header { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 0; }
+.day-num { font-size: 13px; font-weight: 600; color: var(--text); }
+.day-name { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; }
+
+.att-grid td.day-cell {
+  width: 38px; min-width: 38px; height: 34px;
+  padding: 0; cursor: default; position: relative;
+  transition: all .1s;
+}
+.att-grid td.day-cell.weekend { background: var(--weekend); }
+.att-grid td.day-cell .cell-inner {
+  width: 100%; height: 100%; display: flex;
+  align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 600;
+}
+
+/* Cell states */
+.cell-ok .cell-inner { background: var(--ok-bg); color: var(--ok); }
+.cell-late .cell-inner { background: var(--late-bg); color: var(--late); }
+.cell-early .cell-inner { background: var(--early-bg); color: var(--early); }
+.cell-annual .cell-inner { background: var(--annual-bg); color: var(--annual); }
+.cell-unpaid .cell-inner { background: var(--unpaid-bg); color: var(--unpaid); }
+.cell-special .cell-inner { background: var(--special-bg); color: var(--special); }
+.cell-holiday .cell-inner { background: var(--holiday-bg); color: var(--holiday); }
+.cell-ot .cell-inner { background: var(--ot-bg); color: var(--ot); }
+.cell-absent .cell-inner { background: var(--absent-bg); color: var(--absent); }
+.cell-off .cell-inner { color: var(--text3); font-size: 9px; opacity: .4; }
+
+/* Row hover */
+.att-grid tbody tr { cursor: pointer; transition: all .1s; }
+.att-grid tbody tr:hover td { background: rgba(78,140,255,.06); }
+.att-grid tbody tr:hover td.name-col { background: var(--bg3); color: var(--accent); }
+
+.name-text { font-weight: 500; font-size: 13px; }
+.dept-text { font-size: 10px; color: var(--text3); }
+
+/* Tooltip */
+.tooltip {
+  display: none; position: fixed; z-index: 1000;
+  background: var(--bg4); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 12px; color: var(--text);
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+  pointer-events: none; max-width: 280px;
+}
+.tooltip.show { display: block; }
+.tooltip .tt-title { font-weight: 600; margin-bottom: 4px; }
+.tooltip .tt-row { color: var(--text2); margin-top: 2px; }
+
+/* ─── INDIVIDUAL DASHBOARD ─── */
+.individual-panel {
+  display: none;
+  animation: slideUp .3s ease;
+}
+.individual-panel.active { display: block; }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text2); padding: 8px 16px; border-radius: 8px;
+  font-size: 13px; cursor: pointer; margin-bottom: 20px;
+  font-family: inherit; transition: all .15s;
+}
+.back-btn:hover { background: var(--bg4); color: var(--text); }
+
+.emp-header {
+  display: flex; align-items: center; gap: 20px;
+  margin-bottom: 24px; padding: 20px 24px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.emp-avatar {
+  width: 56px; height: 56px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+.emp-info h2 { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+.emp-info p { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+/* Summary cards */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.summary-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.summary-card .sc-label {
+  font-size: 11px; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .5px; font-weight: 600;
+}
+.summary-card .sc-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 26px; font-weight: 700;
+}
+.summary-card .sc-sub {
+  font-size: 11px; color: var(--text3);
+}
+.sc-green .sc-value { color: var(--ok); }
+.sc-red .sc-value { color: var(--late); }
+.sc-yellow .sc-value { color: var(--annual); }
+.sc-blue .sc-value { color: var(--accent); }
+.sc-orange .sc-value { color: var(--ot); }
+.sc-purple .sc-value { color: var(--holiday); }
+
+/* Detail table */
+.detail-section {
+  margin-bottom: 24px;
+}
+.detail-section h3 {
+  font-size: 14px; font-weight: 600; margin-bottom: 10px;
+  color: var(--text); display: flex; align-items: center; gap: 8px;
+}
+.detail-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: 12px; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden;
+}
+.detail-table th {
+  background: var(--bg3); color: var(--text2);
+  font-weight: 600; text-align: left;
+  padding: 10px 14px; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-table td {
+  padding: 9px 14px; border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.detail-table tbody tr:last-child td { border-bottom: none; }
+.detail-table tbody tr:hover { background: rgba(255,255,255,.02); }
+
+.status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+.badge-ok { background: var(--ok-bg); color: var(--ok); }
+.badge-late { background: var(--late-bg); color: var(--late); }
+.badge-early { background: var(--early-bg); color: var(--early); }
+.badge-annual { background: var(--annual-bg); color: var(--annual); }
+.badge-unpaid { background: var(--unpaid-bg); color: var(--unpaid); }
+.badge-special { background: var(--special-bg); color: var(--special); }
+.badge-holiday { background: var(--holiday-bg); color: var(--holiday); }
+.badge-ot { background: var(--ot-bg); color: var(--ot); }
+.badge-absent { background: var(--absent-bg); color: var(--absent); }
+.badge-adj { background: rgba(249,115,22,.1); color: #fb923c; border: 1px dashed rgba(249,115,22,.3); }
+
+/* Payroll box */
+.payroll-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px; margin-bottom: 24px;
+}
+.payroll-box h3 {
+  font-size: 15px; font-weight: 700; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.payroll-rows { display: flex; flex-direction: column; gap: 8px; }
+.payroll-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.payroll-row:last-child { border-bottom: none; }
+.payroll-row .pr-label { font-size: 13px; color: var(--text2); }
+.payroll-row .pr-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px; font-weight: 600;
+}
+.payroll-row.pr-total {
+  padding-top: 12px; margin-top: 4px;
+  border-top: 2px solid var(--border2);
+}
+.payroll-row.pr-total .pr-label { font-weight: 700; color: var(--text); font-size: 15px; }
+.payroll-row.pr-total .pr-value { font-size: 20px; color: var(--ok); }
+.pr-plus { color: var(--ok); }
+.pr-minus { color: var(--late); }
+
+/* Scroll */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">DMAS <span>Bảng Công</span></div>
+  </div>
+  <div class="header-controls">
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">◂</button>
+      <div class="month-label" id="monthLabel"></div>
+      <button onclick="changeMonth(1)">▸</button>
+    </div>
+  </div>
+</div>
+
+<div class="legend-bar">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--ok)"></div>Đúng giờ</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--late)"></div>Đi trễ</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--early)"></div>Về sớm</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--annual)"></div>Phép năm</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--unpaid)"></div>Không lương</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--special)"></div>Nghỉ đặc biệt</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--holiday)"></div>Ngày lễ</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--ot)"></div>Tăng ca (OT)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--absent)"></div>Vắng mặt</div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<!-- COMPANY-WIDE GRID -->
+<div id="gridView" class="grid-container">
+  <div class="grid-title">Bảng Công Toàn Công Ty <span class="badge" id="empCount"></span></div>
+  <div style="overflow-x:auto; border-radius:10px; border:1px solid var(--border);">
+    <table class="att-grid" id="attGrid"></table>
+  </div>
+</div>
+
+<!-- INDIVIDUAL DASHBOARD -->
+<div id="individualView" class="individual-panel" style="padding:20px 28px;">
+  <button class="back-btn" onclick="showGrid()">◂ Quay lại Bảng Công</button>
+  <div id="individualContent"></div>
+</div>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────
+const MONTH_NAMES = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6',
+  'Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+const DAY_NAMES = ['CN','T2','T3','T4','T5','T6','T7'];
+
+let currentYear = 2026, currentMonth = 4; // April 2026
+
+const employees = [
+  { id:'E001', name:'Nguyễn Văn An',     dept:'Command Center', shift:'Ca sáng',  salary:12000000 },
+  { id:'E002', name:'Trần Thị Bích',     dept:'Command Center', shift:'Ca sáng',  salary:10000000 },
+  { id:'E003', name:'Lê Hoàng Cường',    dept:'Triển khai',     shift:'Ca sáng',  salary:15000000 },
+  { id:'E004', name:'Phạm Minh Đức',     dept:'Triển khai',     shift:'Ca chiều', salary:13000000 },
+  { id:'E005', name:'Hoàng Thu Hà',       dept:'Command Center', shift:'Ca sáng',  salary:11000000 },
+  { id:'E006', name:'Võ Quang Huy',       dept:'Kỹ thuật',       shift:'Ca sáng',  salary:14000000 },
+  { id:'E007', name:'Đỗ Thanh Linh',      dept:'Kỹ thuật',       shift:'Ca đêm',   salary:13500000 },
+  { id:'E008', name:'Bùi Thị Mai',        dept:'Command Center', shift:'Ca sáng',  salary:10500000 },
+  { id:'E009', name:'Ngô Đình Nam',       dept:'Triển khai',     shift:'Ca sáng',  salary:12500000 },
+  { id:'E010', name:'Lý Thị Phương',      dept:'Nhân sự',        shift:'Ca sáng',  salary:11500000 },
+  { id:'E011', name:'Đinh Quốc Tuấn',     dept:'Command Center', shift:'Ca chiều', salary:10000000 },
+  { id:'E012', name:'Trịnh Văn Sơn',      dept:'Kỹ thuật',       shift:'Ca sáng',  salary:14500000 },
+];
+
+const holidays2026 = {
+  '2026-04-01': 'Ngày Cá Tháng Tư', // placeholder — not VN holiday
+};
+// In April 2026: 30/4 is Ngày Thống nhất, 01/05 (next month)
+// Let's add some real holidays for demo
+holidays2026['2026-04-30'] = 'Ngày Thống nhất 30/4';
+
+const SHIFT_TIMES = {
+  'Ca sáng':  { start:'08:00', end:'17:00', break:60 },
+  'Ca chiều': { start:'14:00', end:'22:00', break:60 },
+  'Ca đêm':   { start:'22:00', end:'06:00', break:60 },
+};
+
+// Generate attendance data
+function generateAttendance(emp, year, month) {
+  const seed = hashCode(emp.id + year + month);
+  const rng = mulberry32(seed);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const records = [];
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month - 1, d);
+    const dow = date.getDay();
+    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isWeekend = dow === 0; // Sunday off
+    const isHoliday = !!holidays2026[dateStr];
+
+    if (isHoliday) {
+      records.push({ day: d, dow, status: 'holiday', holidayName: holidays2026[dateStr],
+        checkIn: null, checkOut: null, late: 0, early: 0, note: holidays2026[dateStr] });
+      continue;
+    }
+    if (isWeekend) {
+      // Some Sundays might have OT
+      if (rng() < 0.1) {
+        records.push({ day: d, dow, status: 'ot', checkIn: '09:00', checkOut: '17:00',
+          late: 0, early: 0, note: 'Tăng ca Chủ nhật', soCode: 'SO-2026-' + Math.floor(rng()*50+10) });
+      } else {
+        records.push({ day: d, dow, status: 'off', checkIn: null, checkOut: null, late: 0, early: 0 });
+      }
+      continue;
+    }
+
+    const r = rng();
+    const shift = SHIFT_TIMES[emp.shift];
+
+    if (r < 0.60) {
+      // Normal on time
+      const ci = addMinutes(shift.start, Math.floor(rng() * 10) - 5);
+      const co = addMinutes(shift.end, Math.floor(rng() * 15));
+      records.push({ day: d, dow, status: 'ok', checkIn: ci, checkOut: co, late: 0, early: 0,
+        soCode: rng() < 0.4 ? 'SO-2026-' + Math.floor(rng()*50+10) : null });
+    } else if (r < 0.78) {
+      // Late
+      const lateMins = Math.floor(rng() * 45) + 16;
+      const ci = addMinutes(shift.start, lateMins);
+      const co = addMinutes(shift.end, Math.floor(rng() * 10));
+      records.push({ day: d, dow, status: 'late', checkIn: ci, checkOut: co, late: lateMins, early: 0,
+        soCode: rng() < 0.3 ? 'SO-2026-' + Math.floor(rng()*50+10) : null });
+    } else if (r < 0.86) {
+      // Early leave
+      const earlyMins = Math.floor(rng() * 40) + 10;
+      const ci = addMinutes(shift.start, Math.floor(rng() * 8) - 3);
+      const co = addMinutes(shift.end, -earlyMins);
+      records.push({ day: d, dow, status: 'early', checkIn: ci, checkOut: co, late: 0, early: earlyMins });
+    } else if (r < 0.91) {
+      records.push({ day: d, dow, status: 'annual', checkIn: null, checkOut: null, late: 0, early: 0, note: 'Phép năm' });
+    } else if (r < 0.94) {
+      records.push({ day: d, dow, status: 'unpaid', checkIn: null, checkOut: null, late: 0, early: 0, note: 'Nghỉ không lương' });
+    } else if (r < 0.96) {
+      records.push({ day: d, dow, status: 'special', checkIn: null, checkOut: null, late: 0, early: 0,
+        note: ['Nghỉ cưới','Nghỉ tang','Nghỉ tôn giáo'][Math.floor(rng()*3)] });
+    } else if (r < 0.98) {
+      records.push({ day: d, dow, status: 'absent', checkIn: null, checkOut: null, late: 0, early: 0, note: 'Vắng mặt' });
+    } else {
+      // OT weekday
+      const ci = addMinutes(shift.start, Math.floor(rng()*5)-2);
+      records.push({ day: d, dow, status: 'ot', checkIn: ci, checkOut: addMinutes(shift.end, 120 + Math.floor(rng()*60)),
+        late: 0, early: 0, note: 'Tăng ca', soCode: 'SO-2026-' + Math.floor(rng()*50+10) });
+    }
+  }
+  return records;
+}
+
+// Helpers
+function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; } return Math.abs(h); }
+function mulberry32(a) { return function() { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function addMinutes(timeStr, mins) {
+  let [h, m] = timeStr.split(':').map(Number);
+  m += mins;
+  while (m >= 60) { h++; m -= 60; }
+  while (m < 0) { h--; m += 60; }
+  h = ((h % 24) + 24) % 24;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+function formatVND(n) { return n.toLocaleString('vi-VN') + ' đ'; }
+
+const STATUS_LABELS = {
+  ok: 'Đúng giờ', late: 'Đi trễ', early: 'Về sớm',
+  annual: 'Phép năm', unpaid: 'KL', special: 'ĐB',
+  holiday: 'Lễ', ot: 'OT', absent: 'VM', off: '—',
+};
+const STATUS_SHORT = {
+  ok: '✓', late: '!', early: '↩', annual: 'P', unpaid: 'KL',
+  special: '★', holiday: '🎉', ot: 'OT', absent: '✗', off: '—',
+};
+
+// ─── RENDER GRID ─────────────────────────────────────────────────
+function renderGrid() {
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+  document.getElementById('monthLabel').textContent = `${MONTH_NAMES[currentMonth-1]} ${currentYear}`;
+  document.getElementById('empCount').textContent = `${employees.length} nhân viên`;
+
+  let html = '<thead><tr>';
+  html += '<th class="name-col">Nhân viên</th>';
+  html += '<th class="code-col">Mã NV</th>';
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(currentYear, currentMonth - 1, d);
+    const dow = date.getDay();
+    const isSun = dow === 0;
+    html += `<th style="${isSun ? 'background:rgba(239,68,68,.08);' : ''}">
+      <div class="day-header">
+        <span class="day-num" style="${isSun ? 'color:var(--late)' : ''}">${d}</span>
+        <span class="day-name" style="${isSun ? 'color:var(--late)' : ''}">${DAY_NAMES[dow]}</span>
+      </div>
+    </th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  employees.forEach(emp => {
+    const records = generateAttendance(emp, currentYear, currentMonth);
+    html += `<tr onclick="showIndividual('${emp.id}')">`;
+    html += `<td class="name-col"><div class="name-text">${emp.name}</div><div class="dept-text">${emp.dept}</div></td>`;
+    html += `<td class="code-col">${emp.id}</td>`;
+
+    records.forEach(rec => {
+      const cls = `cell-${rec.status}`;
+      const wknd = rec.dow === 0 && rec.status === 'off' ? ' weekend' : '';
+      const sym = STATUS_SHORT[rec.status];
+      // tooltip data
+      const ttData = JSON.stringify({
+        name: emp.name, day: rec.day, status: STATUS_LABELS[rec.status],
+        ci: rec.checkIn, co: rec.checkOut, late: rec.late, early: rec.early,
+        note: rec.note || '', so: rec.soCode || ''
+      }).replace(/"/g, '&quot;');
+
+      html += `<td class="day-cell ${cls}${wknd}"
+        onmouseenter="showTooltip(event, this)" onmouseleave="hideTooltip()"
+        data-tt="${ttData}">
+        <div class="cell-inner">${sym}</div>
+      </td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  document.getElementById('attGrid').innerHTML = html;
+}
+
+// Tooltip
+const tooltip = document.getElementById('tooltip');
+function showTooltip(e, el) {
+  const d = JSON.parse(el.dataset.tt.replace(/&quot;/g, '"'));
+  let h = `<div class="tt-title">${d.name} — Ngày ${d.day}</div>`;
+  h += `<div class="tt-row">Trạng thái: <b>${d.status}</b></div>`;
+  if (d.ci) h += `<div class="tt-row">Check-in: ${d.ci} → Check-out: ${d.co}</div>`;
+  if (d.late > 0) h += `<div class="tt-row" style="color:var(--late)">Trễ ${d.late} phút</div>`;
+  if (d.early > 0) h += `<div class="tt-row" style="color:var(--early)">Sớm ${d.early} phút</div>`;
+  if (d.so) h += `<div class="tt-row">SO: ${d.so}</div>`;
+  if (d.note) h += `<div class="tt-row">${d.note}</div>`;
+  tooltip.innerHTML = h;
+  tooltip.classList.add('show');
+  const r = el.getBoundingClientRect();
+  tooltip.style.left = Math.min(r.left, window.innerWidth - 300) + 'px';
+  tooltip.style.top = (r.bottom + 8) + 'px';
+}
+function hideTooltip() { tooltip.classList.remove('show'); }
+
+// ─── INDIVIDUAL DASHBOARD ────────────────────────────────────────
+function showIndividual(empId) {
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+
+  document.getElementById('gridView').style.display = 'none';
+  const panel = document.getElementById('individualView');
+  panel.classList.add('active');
+  window.scrollTo(0, 0);
+
+  const records = generateAttendance(emp, currentYear, currentMonth);
+  const shift = SHIFT_TIMES[emp.shift];
+
+  // Calculate summary
+  const workingDays = records.filter(r => !['off','holiday'].includes(r.status));
+  const stdShifts = records.filter(r => !['off','holiday'].includes(r.status) && r.status !== 'ot').length;
+  const actualOk = records.filter(r => ['ok','late','early','ot'].includes(r.status)).length;
+  const totalLate = records.reduce((s, r) => s + r.late, 0);
+  const lateCount = records.filter(r => r.late > 0).length;
+  const totalEarly = records.reduce((s, r) => s + r.early, 0);
+  const earlyCount = records.filter(r => r.early > 0).length;
+  const annualDays = records.filter(r => r.status === 'annual').length;
+  const unpaidDays = records.filter(r => r.status === 'unpaid').length;
+  const specialDays = records.filter(r => r.status === 'special').length;
+  const holidayDays = records.filter(r => r.status === 'holiday').length;
+  const otShifts = records.filter(r => r.status === 'ot').length;
+  const absentDays = records.filter(r => r.status === 'absent').length;
+
+  // Payroll calculation
+  const scheduleShifts = records.filter(r => r.status !== 'off').length - holidayDays;
+  const unitPrice = Math.round(emp.salary / (scheduleShifts || 1));
+  const otAmount = otShifts * unitPrice * 1; // 1.0x MVP
+  const holidayOtShifts = 0; // simplified
+  const unpaidDeduction = unpaidDays * unitPrice;
+  const absentDeduction = absentDays * unitPrice;
+  const netSalary = emp.salary + otAmount - unpaidDeduction - absentDeduction;
+
+  // Work hours calculation
+  const shiftHours = (parseTime(shift.end) - parseTime(shift.start) - shift.break) / 60;
+  const stdHours = scheduleShifts * shiftHours;
+  const actualHours = actualOk * shiftHours;
+
+  const initials = emp.name.split(' ').slice(-2).map(w => w[0]).join('');
+
+  let html = '';
+  // Header
+  html += `<div class="emp-header">
+    <div class="emp-avatar">${initials}</div>
+    <div class="emp-info">
+      <h2>${emp.name}</h2>
+      <p>${emp.id} · ${emp.dept} · ${emp.shift} (${shift.start}–${shift.end}) · Lương cứng: ${formatVND(emp.salary)}</p>
+    </div>
+  </div>`;
+
+  // Summary cards
+  html += `<div class="summary-grid">
+    <div class="summary-card sc-green"><div class="sc-label">Ca thực tế</div><div class="sc-value">${actualOk}</div><div class="sc-sub">/ ${scheduleShifts} ca tiêu chuẩn</div></div>
+    <div class="summary-card sc-orange"><div class="sc-label">Ca tăng thêm (OT)</div><div class="sc-value">${otShifts}</div><div class="sc-sub">${otShifts > 0 ? '+' + formatVND(otAmount) : 'Không có OT'}</div></div>
+    <div class="summary-card sc-red"><div class="sc-label">Đi trễ</div><div class="sc-value">${lateCount}</div><div class="sc-sub">${totalLate} phút tổng</div></div>
+    <div class="summary-card"><div class="sc-label">Về sớm</div><div class="sc-value" style="color:var(--early)">${earlyCount}</div><div class="sc-sub">${totalEarly} phút tổng</div></div>
+    <div class="summary-card sc-yellow"><div class="sc-label">Phép năm</div><div class="sc-value">${annualDays}</div><div class="sc-sub">ngày (có lương)</div></div>
+    <div class="summary-card sc-blue"><div class="sc-label">Nghỉ đặc biệt</div><div class="sc-value">${specialDays}</div><div class="sc-sub">ngày (có lương)</div></div>
+    <div class="summary-card sc-purple"><div class="sc-label">Ngày lễ</div><div class="sc-value">${holidayDays}</div><div class="sc-sub">ngày (có lương)</div></div>
+    <div class="summary-card sc-red"><div class="sc-label">Vắng mặt</div><div class="sc-value">${absentDays}</div><div class="sc-sub">${absentDays > 0 ? '-' + formatVND(absentDeduction) : 'Không có'}</div></div>
+  </div>`;
+
+  // Payroll summary
+  html += `<div class="payroll-box">
+    <h3>💰 Tổng Hợp Lương – ${MONTH_NAMES[currentMonth-1]} ${currentYear}</h3>
+    <div class="payroll-rows">
+      <div class="payroll-row"><span class="pr-label">Lương cứng (${scheduleShifts} ca × ${formatVND(unitPrice)}/ca)</span><span class="pr-value">${formatVND(emp.salary)}</span></div>
+      <div class="payroll-row"><span class="pr-label">Giờ công chuẩn</span><span class="pr-value">${stdHours.toFixed(0)}h / ${actualHours.toFixed(0)}h thực tế</span></div>
+      <div class="payroll-row"><span class="pr-label">(+) Tăng ca: ${otShifts} ca × ${formatVND(unitPrice)} × 1.0</span><span class="pr-value pr-plus">${otAmount > 0 ? '+' : ''}${formatVND(otAmount)}</span></div>
+      <div class="payroll-row"><span class="pr-label">(−) Nghỉ không lương: ${unpaidDays} ca × ${formatVND(unitPrice)}</span><span class="pr-value pr-minus">${unpaidDeduction > 0 ? '-' : ''}${formatVND(unpaidDeduction)}</span></div>
+      <div class="payroll-row"><span class="pr-label">(−) Vắng mặt: ${absentDays} ca × ${formatVND(unitPrice)}</span><span class="pr-value pr-minus">${absentDeduction > 0 ? '-' : ''}${formatVND(absentDeduction)}</span></div>
+      <div class="payroll-row pr-total"><span class="pr-label">Lương thực nhận (pre-tax)</span><span class="pr-value">${formatVND(netSalary)}</span></div>
+    </div>
+  </div>`;
+
+  // Daily detail table
+  html += `<div class="detail-section">
+    <h3>📋 Chi Tiết Chấm Công Từng Ngày</h3>
+    <div style="overflow-x:auto;">
+    <table class="detail-table">
+      <thead><tr>
+        <th style="width:60px">Ngày</th><th style="width:40px">Thứ</th>
+        <th style="width:90px">Trạng thái</th>
+        <th style="width:70px">Check-in</th><th style="width:70px">Check-out</th>
+        <th style="width:70px">Trễ</th><th style="width:70px">Sớm</th>
+        <th>SO / Ghi chú</th>
+      </tr></thead><tbody>`;
+
+  records.forEach(rec => {
+    const dateStr = `${String(rec.day).padStart(2,'0')}/${String(currentMonth).padStart(2,'0')}`;
+    const dayName = DAY_NAMES[rec.dow];
+    const badgeClass = `badge-${rec.status}`;
+    const isSun = rec.dow === 0;
+
+    html += `<tr style="${isSun ? 'background:rgba(255,255,255,.015)' : ''}">
+      <td style="font-weight:600;${isSun ? 'color:var(--late)' : ''}">${dateStr}</td>
+      <td style="${isSun ? 'color:var(--late)' : 'color:var(--text3)'}">${dayName}</td>
+      <td><span class="status-badge ${badgeClass}">${STATUS_LABELS[rec.status]}</span></td>
+      <td style="font-family:'JetBrains Mono',monospace; color:${rec.checkIn ? 'var(--text)' : 'var(--text3)'}">${rec.checkIn || '—'}</td>
+      <td style="font-family:'JetBrains Mono',monospace; color:${rec.checkOut ? 'var(--text)' : 'var(--text3)'}">${rec.checkOut || '—'}</td>
+      <td>${rec.late > 0 ? `<span class="status-badge badge-late">${rec.late}p</span>` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td>${rec.early > 0 ? `<span class="status-badge badge-early">${rec.early}p</span>` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td style="color:var(--text2); font-size:11px">${rec.soCode ? `<span style="color:var(--accent)">${rec.soCode}</span> ` : ''}${rec.note || ''}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div></div>';
+
+  document.getElementById('individualContent').innerHTML = html;
+}
+
+function parseTime(t) { const [h,m] = t.split(':').map(Number); return h * 60 + m; }
+
+function showGrid() {
+  document.getElementById('gridView').style.display = 'block';
+  document.getElementById('individualView').classList.remove('active');
+}
+
+function changeMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+  renderGrid();
+  showGrid();
+}
+
+// Init
+renderGrid();
+</script>
+</body>
+</html>

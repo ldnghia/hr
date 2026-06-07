@@ -4,12 +4,15 @@
  * Grid cell shows S/C (Sáng/Chiều) check marks for each day.
  * For multi-shift days: workingHours = SUM across all sessions that day.
  * Earliest check-in / latest checkout are used for display.
+ * Also adds a "Báo Cáo Ngày Công" summary sheet for ca cố định.
  */
 import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { AttendanceQueryService } from './attendance-query.service';
 import { ReportAttendanceDto } from './dto/report-attendance.dto';
 import * as ExcelJS from 'exceljs';
 import { Response } from 'express';
+import { buildFixedSummarySheet } from './attendance-export-fixed-summary-sheet';
 
 /** Format YYYY-MM-DD from local calendar date (avoids UTC shift on UTC+7 servers) */
 const localDateStr = (d: Date): string =>
@@ -26,7 +29,10 @@ interface DaySlot {
 
 @Injectable()
 export class AttendanceExportGridService {
-  constructor(private readonly queryService: AttendanceQueryService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly queryService: AttendanceQueryService,
+  ) {}
 
   async exportGridReport(
     dto: ReportAttendanceDto,
@@ -205,6 +211,42 @@ export class AttendanceExportGridService {
         });
       });
     });
+
+    // ── "Báo Cáo Ngày Công" summary sheet ────────────────────────────────────
+    const calDays = await this.prisma.calendarDay.findMany({
+      where: { date: { gte: start, lte: end } },
+    });
+    const calMap = new Map(calDays.map((d) => [
+      localDateStr(new Date(d.date)),
+      { type: d.type },
+    ]));
+
+    let officialWorkingDays = 0;
+    let officialHolidayDays = 0;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const ds = localDateStr(d);
+      const cal = calMap.get(ds);
+      const dow = d.getDay();
+      if (!cal) { if (dow !== 0 && dow !== 6) officialWorkingDays++; continue; }
+      if (cal.type === 'WORKING' || cal.type === 'COMPENSATION') officialWorkingDays++;
+      else if (cal.type === 'HOLIDAY') officialHolidayDays++;
+    }
+
+    const leaveReqs = await this.prisma.leaveRequest.findMany({
+      where: {
+        status: 'approved',
+        OR: [
+          { fromDate: { gte: start, lte: end } },
+          { toDate: { gte: start, lte: end } },
+          { fromDate: { lte: start }, toDate: { gte: end } },
+        ],
+      },
+    });
+
+    buildFixedSummarySheet(
+      wb, records, leaveReqs, employees,
+      start, end, officialWorkingDays, officialHolidayDays, calMap,
+    );
 
     const filename = `Bang_Cham_Cong_${start.getFullYear()}_${String(start.getMonth() + 1).padStart(2, '0')}.xlsx`;
     res.setHeader(

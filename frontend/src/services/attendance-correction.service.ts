@@ -25,11 +25,14 @@ export interface CorrectionRequest {
   employee?: { id: number; fullName?: string; code?: string };
   reviewer?: { id: number; fullName?: string } | null;
   attendance?: { id: number; date: string } | null;
-  requestedShift?: { id: number; name: string } | null;
+  requestedShift?: { id: number; name: string; startTime?: string; endTime?: string } | null;
+  originalShift?:  { id: number; name: string; startTime?: string; endTime?: string } | null;
 }
 
 export interface CreateCorrectionPayload {
-  attendanceId: number;
+  attendanceId?: number;
+  date?: string; // YYYY-MM-DD — used when no attendanceId
+  shiftId?: number; // disambiguates multi-shift per day (CC employees)
   requestedCheckinTime?: string;
   requestedCheckoutTime?: string;
   requestedCheckinNote?: string;

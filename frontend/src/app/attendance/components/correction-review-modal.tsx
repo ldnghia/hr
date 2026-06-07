@@ -93,6 +93,17 @@ export function CorrectionReviewModal({ request, isOpen = true, onClose, onSucce
               />
               <DiffRow label={t('attendance.checkinNoteField')} original={request.originalCheckinNote} requested={request.requestedCheckinNote} />
               <DiffRow label={t('attendance.checkoutNoteField')} original={request.originalCheckoutNote} requested={request.requestedCheckoutNote} />
+              {(request.requestedShift || request.requestedShiftId) && (
+                <DiffRow
+                  label="Ca làm việc"
+                  original={request.originalShift
+                    ? `${request.originalShift.name} (${request.originalShift.startTime} — ${request.originalShift.endTime})`
+                    : (request.originalShiftId ? `Ca #${request.originalShiftId}` : '—')}
+                  requested={request.requestedShift
+                    ? `${request.requestedShift.name} (${request.requestedShift.startTime} — ${request.requestedShift.endTime})`
+                    : `Ca #${request.requestedShiftId}`}
+                />
+              )}
             </tbody>
           </table>
         </div>

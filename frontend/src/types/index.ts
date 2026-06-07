@@ -240,7 +240,7 @@ export interface AttendanceRecord {
   // Correction tracking
   isCorrected?: boolean;
   correctionRequestId?: number | null;
-  corrections?: Array<{ id: number; status: string }>;
+  corrections?: Array<{ id: number; status: string; reason?: string | null; reviewNote?: string | null }>;
   employee?: Pick<Employee, 'id' | 'fullName' | 'code' | 'department' | 'position'>;
 }
 
@@ -402,7 +402,7 @@ export interface AttendanceSession {
   checkoutTime?: string | null;
   workingHours?: number | string | null;
   shiftId?: number | null;
-  shift?: Pick<Shift, 'id' | 'name' | 'startTime' | 'endTime'> | null;
+  shift?: Pick<Shift, 'id' | 'name' | 'startTime' | 'endTime' | 'graceLateMinutes' | 'graceEarlyMinutes'> | null;
   isLate: boolean;
   isEarlyOut: boolean;
   isOvertime: boolean;

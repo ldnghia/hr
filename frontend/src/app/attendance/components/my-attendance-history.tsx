@@ -17,11 +17,13 @@ import type { AttendanceRecord, PaginatedResponse } from '@/types';
 export interface MyAttendanceHistoryProps {
   isAdminOrHr: boolean;
   onAdminEditSuccess?: () => void;
+  /** Increment to force a data reload (e.g. after check-in/out) */
+  refreshKey?: number;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function MyAttendanceHistory({ isAdminOrHr, onAdminEditSuccess }: MyAttendanceHistoryProps) {
+export function MyAttendanceHistory({ isAdminOrHr, onAdminEditSuccess, refreshKey }: MyAttendanceHistoryProps) {
   const { t } = useTranslation();
   const [records, setRecords] = useState<PaginatedResponse<AttendanceRecord> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,8 @@ export function MyAttendanceHistory({ isAdminOrHr, onAdminEditSuccess }: MyAtten
     }
   }, [page, limit]);
 
-  useEffect(() => { load(); }, [load]);
+  // Reload when page/limit changes OR when refreshKey increments (checkin/checkout)
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm">

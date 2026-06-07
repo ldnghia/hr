@@ -30,7 +30,27 @@ interface EmployeeSummary {
   ngayCong: number;
   totalHours: number;
   totalSessions: number;
+  lateDays: number;
+  earlyDays: number;
+  correctedDays: number;
+  scheduledShifts: number; // total shifts assigned in EmployeeShiftSchedule
+  shiftSang: number;   // morning sessions (S)
+  shiftChieu: number;  // afternoon sessions (C)
+  shiftToi: number;    // evening/night sessions (D)
   annual: number; sick: number; comp: number; unpaid: number; holiday: number; unexcused: number; total: number;
+}
+
+/** Mirror of frontend deriveShiftCode — classifies a shift as S/C/D from name then startTime */
+function deriveShiftType(shift?: { name?: string; startTime?: string } | null): 'S' | 'C' | 'D' {
+  if (!shift) return 'D';
+  const name = (shift.name || '').toLowerCase();
+  if (name.includes('sáng') || name.includes('sang') || name.includes('morning') || name.includes('s1') || name.includes('ca s')) return 'S';
+  if (name.includes('chiều') || name.includes('chieu') || name.includes('afternoon') || name.includes('ca c')) return 'C';
+  if (name.includes('đêm') || name.includes('dem') || name.includes('night') || name.includes('ca d') || name.includes('ca đ')) return 'D';
+  const h = parseInt((shift.startTime || '0:0').split(':')[0], 10);
+  if (h >= 5 && h < 11) return 'S';
+  if (h >= 11 && h < 18) return 'C';
+  return 'D';
 }
 
 const thin = { style: 'thin' as const };
@@ -87,10 +107,14 @@ export class AttendanceExportCombinedService {
       }),
     ]);
 
-    // Merge: all employees base list + enrich with attendance employee data (which has more fields from includes)
+    // Build employee map from the status-filtered list ONLY.
+    // Records may contain resigned/inactive employees (historical data) — do NOT add them.
+    // Only enrich existing entries with richer attendance-query data (which has more fields).
     const empMap = new Map<number, any>();
     allEmployees.forEach((e) => empMap.set(e.id, e));
-    records.forEach((r: any) => { if (r.employee) empMap.set(r.employee.id, r.employee); });
+    records.forEach((r: any) => {
+      if (r.employee && empMap.has(r.employee.id)) empMap.set(r.employee.id, r.employee);
+    });
     // Sort by department name first, then employee code
     const employees = [...empMap.values()].sort((a, b) => {
       const dCmp = (a.department?.name || '').localeCompare(b.department?.name || '', 'vi');
@@ -120,6 +144,21 @@ export class AttendanceExportCombinedService {
       }
     });
 
+    // Shift schedule count per employee (for SHIFT mode "Số ca đã phân" column)
+    const scheduleCountMap = new Map<number, number>();
+    if (workingMode === 'SHIFT' && empIds.length > 0) {
+      const schedules = await this.prisma.employeeShiftSchedule.findMany({
+        where: {
+          employeeId: { in: empIds },
+          date: { gte: start, lte: end },
+        },
+        select: { employeeId: true },
+      });
+      schedules.forEach((s) => {
+        scheduleCountMap.set(s.employeeId, (scheduleCountMap.get(s.employeeId) ?? 0) + 1);
+      });
+    }
+
     // Calendar days + official counts
     const calDays = await this.prisma.calendarDay.findMany({ where: { date: { gte: start, lte: end } } });
     const calMap = new Map(calDays.map((d) => [localDateStr(new Date(d.date)), d]));
@@ -146,14 +185,28 @@ export class AttendanceExportCombinedService {
     }) : [];
 
     // Attendance day sets
-    const attDaySet   = new Map<string, boolean>();
-    const attHoursMap = new Map<number, number>();
-    const attSessionsMap = new Map<number, number>();
+    const attDaySet        = new Map<string, boolean>();
+    const attHoursMap      = new Map<number, number>();
+    const attSessionsMap   = new Map<number, number>();
+    const lateMap          = new Map<number, number>();
+    const earlyMap         = new Map<number, number>();
+    const correctedDaySet  = new Set<string>(); // "empId_date" — distinct corrected days
+    const shiftSangMap     = new Map<number, number>();
+    const shiftChieuMap    = new Map<number, number>();
+    const shiftToiMap      = new Map<number, number>();
     records.forEach((r: any) => {
       if (r.checkinTime && !r.isOnLeave) {
-        attDaySet.set(`${r.employeeId}_${localDateStr(new Date(r.date))}`, true);
+        const dayKey = `${r.employeeId}_${localDateStr(new Date(r.date))}`;
+        attDaySet.set(dayKey, true);
         attHoursMap.set(r.employeeId, (attHoursMap.get(r.employeeId) ?? 0) + (r.workingHours ? Number(r.workingHours) : 0));
         attSessionsMap.set(r.employeeId, (attSessionsMap.get(r.employeeId) ?? 0) + 1);
+        if (r.isLate)      lateMap.set(r.employeeId,  (lateMap.get(r.employeeId)  ?? 0) + 1);
+        if (r.isEarlyOut)  earlyMap.set(r.employeeId, (earlyMap.get(r.employeeId) ?? 0) + 1);
+        if (r.isCorrected) correctedDaySet.add(dayKey);
+        const st = deriveShiftType(r.shift);
+        if (st === 'S') shiftSangMap.set(r.employeeId,  (shiftSangMap.get(r.employeeId)  ?? 0) + 1);
+        if (st === 'C') shiftChieuMap.set(r.employeeId, (shiftChieuMap.get(r.employeeId) ?? 0) + 1);
+        if (st === 'D') shiftToiMap.set(r.employeeId,   (shiftToiMap.get(r.employeeId)   ?? 0) + 1);
       }
     });
 
@@ -167,12 +220,20 @@ export class AttendanceExportCombinedService {
       }
       const totalHours    = parseFloat((attHoursMap.get(emp.id) ?? 0).toFixed(2));
       const totalSessions = attSessionsMap.get(emp.id) ?? 0;
+      const lateDays      = lateMap.get(emp.id)  ?? 0;
+      const earlyDays     = earlyMap.get(emp.id) ?? 0;
+      const correctedDays = [...correctedDaySet].filter(k => k.startsWith(`${emp.id}_`)).length;
       const empLeaves     = leaveReqs.filter((lr) => lr.employeeId === emp.id);
       const leaveDays     = (type: string) => empLeaves.filter((l) => l.type === type).reduce((s, l) => s + Number(l.days || 0), 0);
       const annual = leaveDays('annual'), sick = leaveDays('sick'), comp = leaveDays('compensatory'), unpaid = leaveDays('unpaid');
       const accounted = ngayCong + annual + sick + comp + unpaid + officialHolidayDays;
       return {
-        emp, ngayCong, totalHours, totalSessions, annual, sick, comp, unpaid,
+        emp, ngayCong, totalHours, totalSessions, lateDays, earlyDays, correctedDays,
+        scheduledShifts: scheduleCountMap.get(emp.id) ?? 0,
+        shiftSang:  shiftSangMap.get(emp.id)  ?? 0,
+        shiftChieu: shiftChieuMap.get(emp.id) ?? 0,
+        shiftToi:   shiftToiMap.get(emp.id)   ?? 0,
+        annual, sick, comp, unpaid,
         holiday: officialHolidayDays,
         unexcused: Math.max(0, officialWorkingDays - accounted),
         total: parseFloat((ngayCong + annual + officialHolidayDays + sick + comp).toFixed(1)),
@@ -182,7 +243,7 @@ export class AttendanceExportCombinedService {
     // ── Build workbook ────────────────────────────────────────────────────────
     const wb = new ExcelJS.Workbook();
     this.addGridSheet(wb, employees, days, lookup);
-    this.addSummarySheet(wb, summaries, start, end, officialWorkingDays, officialHolidayDays);
+    this.addSummarySheet(wb, summaries, start, end, officialWorkingDays, officialHolidayDays, workingMode);
 
     const month = String(start.getMonth() + 1).padStart(2, '0');
     const year  = start.getFullYear();
@@ -258,15 +319,48 @@ export class AttendanceExportCombinedService {
   private addSummarySheet(
     wb: ExcelJS.Workbook, summaries: EmployeeSummary[],
     start: Date, end: Date, officialWorkingDays: number, officialHolidayDays: number,
+    workingMode: 'FIXED' | 'SHIFT',
   ) {
     const ws = wb.addWorksheet('Báo Cáo Ngày Công');
-    const COLS = [
-      { h: 'STT', w: 5 }, { h: 'Họ và tên', w: 22 }, { h: 'Chức vụ', w: 14 }, { h: 'Phòng ban', w: 18 },
-      { h: 'Ngày\ncông', w: 8 }, { h: 'Giờ\ncông', w: 9 }, { h: 'Ca\nlàm', w: 7 },
+    // FIXED: Ngày công | Đi trễ | Về sớm | Chỉnh sửa
+    // SHIFT: Ca làm | Đi trễ | Về sớm | Chỉnh sửa | Ca sáng | Ca chiều | Ca tối
+    //        (no Ngày công col — CC works all 7 days, weekend counting is ambiguous)
+    const FIXED_COLS = [
+      { h: 'Ngày\ncông',      w: 8 },
+      { h: 'Đi\ntrễ',        w: 7 },
+      { h: 'Về\nsớm',        w: 7 },
+      { h: 'Ngày\nchỉnh sửa', w: 9 },
+    ];
+    const SHIFT_COLS = [
+      { h: 'Ca\nđã phân', w: 8 },
+      { h: 'Ca\nlàm',     w: 7 },
+      { h: 'Đi\ntrễ',    w: 7 },
+      { h: 'Về\nsớm',    w: 7 },
+      { h: 'Chỉnh\nsửa',  w: 8 },
+      { h: 'Ca\nsáng',   w: 7 },
+      { h: 'Ca\nchiều',  w: 7 },
+      { h: 'Ca\ntối',    w: 7 },
+    ];
+    const MODE_COLS = workingMode === 'FIXED' ? FIXED_COLS : SHIFT_COLS;
+    const BASE_LEAVE_COLS = [
       { h: 'Nghỉ phép\nnăm', w: 10 }, { h: 'Nghỉ\nốm', w: 8 }, { h: 'Nghỉ\nbù', w: 8 },
       { h: 'Nghỉ không\nlương', w: 11 }, { h: 'Nghỉ\nlễ, Tết', w: 9 },
-      { h: 'Nghỉ không\nlý do', w: 11 }, { h: 'Cộng ngày\ncông hưởng', w: 12 },
+      { h: 'Nghỉ không\nlý do', w: 11 },
     ];
+    // FIXED keeps "Cộng ngày công hưởng"; SHIFT omits it (CC report focuses on shift counts)
+    const LEAVE_COLS = workingMode === 'FIXED'
+      ? [...BASE_LEAVE_COLS, { h: 'Cộng ngày\ncông hưởng', w: 12 }]
+      : BASE_LEAVE_COLS;
+    const COLS = [
+      { h: 'STT', w: 5 }, { h: 'Họ và tên', w: 22 }, { h: 'Chức vụ', w: 14 }, { h: 'Phòng ban', w: 18 },
+      ...MODE_COLS, ...LEAVE_COLS,
+    ];
+    // FIXED: "Nghỉ không lý do" is 2nd-to-last, "Cộng" is last
+    // SHIFT: "Nghỉ không lý do" is the last col (no Cộng)
+    const ciUnexcused = workingMode === 'FIXED' ? COLS.length - 2 : COLS.length - 1;
+    const ciTotal     = workingMode === 'FIXED' ? COLS.length - 1 : -1; // -1 = no total col for SHIFT
+    // First mode-specific col index (after 4 fixed cols: STT/Tên/Chức vụ/Phòng ban)
+    const ciModeStart = 4;
     COLS.forEach((c, i) => { ws.getColumn(i + 1).width = c.w; });
 
     // Title
@@ -281,7 +375,9 @@ export class AttendanceExportCombinedService {
     // Subtitle
     ws.mergeCells(2, 1, 2, COLS.length);
     const sc = ws.getCell(2, 1);
-    sc.value = `${formatDate(start)} — ${formatDate(end)}  |  Ngày làm việc: ${officialWorkingDays}  |  Ngày lễ: ${officialHolidayDays}`;
+    sc.value = workingMode === 'FIXED'
+      ? `${formatDate(start)} — ${formatDate(end)}  |  Ngày làm việc: ${officialWorkingDays}  |  Ngày lễ: ${officialHolidayDays}`
+      : `${formatDate(start)} — ${formatDate(end)}`;
     sc.font = { size: 9, italic: true, color: { argb: 'FF666666' } };
     sc.alignment = { horizontal: 'center', vertical: 'middle' };
     sc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
@@ -297,21 +393,51 @@ export class AttendanceExportCombinedService {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBBC8F5' } };
     });
 
-    // Data — cols: STT|Tên|Chức vụ|Phòng ban|ngayCong|totalHours|totalSessions|annual|sick|comp|unpaid|holiday|unexcused|total
+    // Data rows
     summaries.forEach((s, idx) => {
       const row = ws.getRow(4 + idx); row.height = 16;
+      const modeVals = workingMode === 'FIXED'
+        ? [s.ngayCong, s.lateDays, s.earlyDays, s.correctedDays]
+        : [s.scheduledShifts, s.totalSessions, s.lateDays, s.earlyDays, s.correctedDays, s.shiftSang, s.shiftChieu, s.shiftToi];
       const vals = [idx + 1, s.emp.fullName || '', s.emp.position?.name || '', s.emp.department?.name || '',
-        s.ngayCong, s.totalHours, s.totalSessions, s.annual, s.sick, s.comp,
-        s.unpaid, s.holiday, s.unexcused, s.total];
+        ...modeVals,
+        // SHIFT omits s.total (no "Cộng ngày công hưởng" column)
+        ...(workingMode === 'FIXED'
+          ? [s.annual, s.sick, s.comp, s.unpaid, s.holiday, s.unexcused, s.total]
+          : [s.annual, s.sick, s.comp, s.unpaid, s.holiday, s.unexcused])];
       vals.forEach((v, ci) => {
         const cell = row.getCell(ci + 1);
         cell.value = typeof v === 'number' ? (v === 0 ? 0 : parseFloat(Number(v).toFixed(2))) : v;
         cell.border = BORDER;
-        // ci=12 → unexcused (red bold if > 0); ci=13 → total (highlight)
-        cell.font = { size: 9, ...(ci === 12 && (v as number) > 0 ? { bold: true, color: { argb: 'FFCC0000' } } : {}), ...(typeof v === 'number' && v === 0 ? { color: { argb: 'FFAAAAAA' } } : {}) };
+        // ci→{textColor, bgColor} for mode-specific columns (>0 only)
+        // FIXED mode: ci=4 Ngày công (no highlight), ci=5 Đi trễ, ci=6 Về sớm, ci=7 Chỉnh sửa
+        // SHIFT mode: ci=4 Ca làm, ci=5 Đi trễ, ci=6 Về sớm, ci=7 Chỉnh sửa, ci=8-10 Ca Sáng/Chiều/Tối
+        // FIXED: ci=4 Ngày công (no color), ci=5 Đi trễ, ci=6 Về sớm, ci=7 Chỉnh sửa
+        // SHIFT: ci=4 Ca đã phân, ci=5 Ca làm, ci=6 Đi trễ, ci=7 Về sớm, ci=8 Chỉnh sửa, ci=9-11 Ca S/C/T
+        const COLOR_MAP: Record<string, { text: string; bg: string }> = workingMode === 'FIXED'
+          ? { 5: { text: 'FFE65100', bg: 'FFFFF3E0' },  // Đi trễ — orange
+              6: { text: 'FF1565C0', bg: 'FFE3F2FD' },  // Về sớm — blue
+              7: { text: 'FF6A1B9A', bg: 'FFF3E5F5' },  // Chỉnh sửa — purple
+            }
+          : { 4: { text: 'FF01579B', bg: 'FFE1F5FE' },  // Ca đã phân — light blue
+              5: { text: 'FF2E7D32', bg: 'FFE8F5E9' },  // Ca làm — green
+              6: { text: 'FFE65100', bg: 'FFFFF3E0' },  // Đi trễ — orange
+              7: { text: 'FF1565C0', bg: 'FFE3F2FD' },  // Về sớm — blue
+              8: { text: 'FF6A1B9A', bg: 'FFF3E5F5' },  // Chỉnh sửa — purple
+              9: { text: 'FFF57F00', bg: 'FFFFF8E1' },  // Ca sáng — amber
+             10: { text: 'FF00838F', bg: 'FFE0F7FA' },  // Ca chiều — teal
+             11: { text: 'FF283593', bg: 'FFE8EAF6' },  // Ca tối — indigo
+            };
+        const colorCfg = (v as number) > 0 ? COLOR_MAP[String(ci)] : undefined;
+        cell.font = {
+          size: 9,
+          ...(ci === ciUnexcused && (v as number) > 0 ? { bold: true, color: { argb: 'FFCC0000' } } : {}),
+          ...(colorCfg ? { bold: true, color: { argb: colorCfg.text } } : {}),
+          ...(typeof v === 'number' && v === 0 ? { color: { argb: 'FFAAAAAA' } } : {}),
+        };
         cell.alignment = { horizontal: ci < 4 ? (ci === 0 ? 'center' : 'left') : 'center', vertical: 'middle' };
-        if (ci === 13) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECEFF1' } };
-        if (ci === 5 && (v as number) > 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+        if (ciTotal >= 0 && ci === ciTotal) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECEFF1' } };
+        if (colorCfg) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorCfg.bg } };
       });
     });
 
@@ -324,8 +450,10 @@ export class AttendanceExportCombinedService {
     tl.font = { bold: true, size: 9 };
     tl.alignment = { horizontal: 'center', vertical: 'middle' };
     tl.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
-    (['ngayCong', 'totalHours', 'totalSessions', 'annual', 'sick', 'comp', 'unpaid', 'holiday', 'unexcused', 'total'] as (keyof EmployeeSummary)[])
-      .forEach((field, i) => {
+    const sumFields: (keyof EmployeeSummary)[] = workingMode === 'FIXED'
+      ? ['ngayCong', 'lateDays', 'earlyDays', 'correctedDays', 'annual', 'sick', 'comp', 'unpaid', 'holiday', 'unexcused', 'total']
+      : ['scheduledShifts', 'totalSessions', 'lateDays', 'earlyDays', 'correctedDays', 'shiftSang', 'shiftChieu', 'shiftToi', 'annual', 'sick', 'comp', 'unpaid', 'holiday', 'unexcused'];
+    sumFields.forEach((field, i) => {
         const cell = tr.getCell(5 + i); // col 5+ (after STT/Tên/ChứcVụ/PhòngBan)
         cell.value = parseFloat(summaries.reduce((a, s) => a + (s[field] as number), 0).toFixed(2));
         cell.border = BORDER;

@@ -113,7 +113,7 @@ export class AttendanceQueryService {
         include: {
           employee: { select: ATTENDANCE_EMPLOYEE_SELECT },
           shift: true,
-          corrections: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true } },
+          corrections: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, reason: true, reviewNote: true } },
         },
         skip,
         take,
@@ -406,7 +406,7 @@ export class AttendanceQueryService {
         include: {
           employee: { select: ATTENDANCE_EMPLOYEE_SELECT },
           shift: true,
-          corrections: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true } },
+          corrections: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, reason: true, reviewNote: true } },
         },
         skip,
         take,

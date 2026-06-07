@@ -261,6 +261,7 @@ model Shift {
   assignments         EmployeeShiftAssignment[]
   department          Department?               @relation(fields: [departmentId], references: [id])
   correctionRequests  AttendanceCorrectionRequest[] @relation("CorrectionRequestedShift")
+  originalCorrections AttendanceCorrectionRequest[] @relation("CorrectionOriginalShift")
   schedules           EmployeeShiftSchedule[]       @relation("ShiftToSchedule")
 
   @@map("shift")
@@ -379,6 +380,7 @@ model AttendanceCorrectionRequest {
   reviewer              Employee? @relation("CorrectionReviewer", fields: [reviewedBy], references: [id])
   attendance            Attendance @relation("AttendanceToCorrections", fields: [attendanceId], references: [id])
   requestedShift        Shift?    @relation("CorrectionRequestedShift", fields: [requestedShiftId], references: [id])
+  originalShift         Shift?    @relation("CorrectionOriginalShift",   fields: [originalShiftId],   references: [id])
 
   @@index([employeeId, createdAt])
   @@index([attendanceId, status])

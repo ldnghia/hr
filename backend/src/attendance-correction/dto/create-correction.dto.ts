@@ -8,9 +8,20 @@ import {
 } from 'class-validator';
 
 export class CreateCorrectionDto {
-  @ApiProperty({ description: 'Attendance record ID to correct' })
+  @ApiPropertyOptional({ description: 'Attendance record ID to correct. If omitted, provide date to auto-create a record.' })
+  @IsOptional()
   @IsInt()
-  attendanceId: number;
+  attendanceId?: number;
+
+  @ApiPropertyOptional({ description: 'Date (YYYY-MM-DD) — used when attendanceId is not provided' })
+  @IsOptional()
+  @IsDateString()
+  date?: string;
+
+  @ApiPropertyOptional({ description: 'Shift ID — disambiguates multiple attendance records on the same date (e.g. CC employees working multiple shifts)' })
+  @IsOptional()
+  @IsInt()
+  shiftId?: number;
 
   @ApiPropertyOptional({ description: 'Requested check-in time (ISO 8601)' })
   @IsOptional()

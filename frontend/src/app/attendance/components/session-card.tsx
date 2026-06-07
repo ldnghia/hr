@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 import { formatDateTime, formatHours } from '@/utils/format';
 import type { AttendanceSession, MonthlyShift } from '@/types';
 
@@ -46,6 +48,7 @@ export function SessionCard({
 }: SessionCardProps) {
   const { t } = useTranslation();
   const status = deriveStatus(session);
+  const [confirmingCheckout, setConfirmingCheckout] = useState(false);
 
   const borderClass =
     status === 'active'
@@ -135,17 +138,127 @@ export function SessionCard({
         </Button>
       )}
       {status === 'active' && (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="w-full"
-          loading={actionLoading}
-          onClick={onCheckOut}
-        >
-          {t('attendance.checkOut')}
-        </Button>
+        <>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="w-full"
+            loading={actionLoading}
+            onClick={() => setConfirmingCheckout(true)}
+          >
+            {t('attendance.checkOut')}
+          </Button>
+
+          <CheckoutConfirmModal
+            open={confirmingCheckout}
+            session={session}
+            shift={shift}
+            actionLoading={actionLoading}
+            onCancel={() => setConfirmingCheckout(false)}
+            onConfirm={() => { setConfirmingCheckout(false); onCheckOut(); }}
+          />
+        </>
       )}
     </div>
+  );
+}
+
+// ─── Checkout confirm modal ───────────────────────────────────────────────────
+
+function CheckoutConfirmModal({
+  open, session, shift, actionLoading, onCancel, onConfirm,
+}: {
+  open: boolean;
+  session: AttendanceSession | null;
+  shift: MonthlyShift;
+  actionLoading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const now = new Date();
+  const ci = session?.checkinTime ? new Date(session.checkinTime) : null;
+
+  // Total worked so far
+  const workedMs = ci ? now.getTime() - ci.getTime() : 0;
+  const workedH = Math.floor(workedMs / 3_600_000);
+  const workedM = Math.floor((workedMs % 3_600_000) / 60_000);
+  const workedLabel = ci ? `${workedH}h${workedM > 0 ? ` ${workedM}p` : ''}` : null;
+
+  // Về sớm check
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const [eh, em] = shift.endTime.split(':').map(Number);
+  const endMin = eh * 60 + em;
+  const isEarlyOut = nowMin < endMin;
+  const earlyMin = isEarlyOut ? endMin - nowMin : 0;
+
+  const hasFlags = session?.isLate || isEarlyOut;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onCancel}
+      size="sm"
+      title="Xác nhận kết thúc ca"
+      footer={
+        <div className="flex gap-3 w-full">
+          <Button variant="secondary" className="flex-1 h-10" onClick={onCancel} disabled={actionLoading}>
+            Huỷ
+          </Button>
+          <Button className="flex-1 h-10" loading={actionLoading} onClick={onConfirm}>
+            Xác nhận
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        {/* Shift info */}
+        <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">{shift.shiftName}</p>
+            <p className="text-xs text-gray-400">{shift.startTime} — {shift.endTime}</p>
+          </div>
+          {ci && (
+            <div className="text-right">
+              <p className="text-[10px] text-gray-400 uppercase font-semibold">Check-in</p>
+              <p className="text-sm font-mono font-semibold text-gray-700">
+                {ci.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Stats row */}
+        <div className={`grid gap-3 ${hasFlags ? 'grid-cols-3' : 'grid-cols-1'}`}>
+          {/* Giờ làm */}
+          {workedLabel && (
+            <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 text-center shadow-sm">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Giờ làm</p>
+              <p className="text-2xl font-bold text-gray-800">{workedLabel}</p>
+            </div>
+          )}
+          {/* Đi trễ */}
+          {session?.isLate && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-400 mb-1">Đi trễ</p>
+              <p className="text-2xl">⚠️</p>
+            </div>
+          )}
+          {/* Về sớm */}
+          {isEarlyOut && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-400 mb-1">Về sớm</p>
+              <p className="text-2xl font-bold text-blue-600">{earlyMin}p</p>
+            </div>
+          )}
+        </div>
+
+        {(session?.isLate || isEarlyOut) && (
+          <p className="text-xs text-gray-400 text-center">
+            Thông tin này sẽ được ghi nhận vào báo cáo chấm công.
+          </p>
+        )}
+      </div>
+    </Modal>
   );
 }
 

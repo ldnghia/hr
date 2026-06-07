@@ -11,10 +11,37 @@ import { AdminEditAttendanceDto } from './dto/admin-edit-attendance.dto';
 import { ListCorrectionQueryDto } from './dto/list-correction-query.dto';
 import { ApproveCorrectionDto, RejectCorrectionDto } from './dto/review-correction.dto';
 import { CORRECTION_STATUS } from './attendance-correction.constants';
+import { computeSessionFlags } from '../attendance/helpers/session-hours';
+import type { ShiftLike } from '../attendance/helpers/shift-resolver';
 
-function computeWorkingHours(checkin?: Date | null, checkout?: Date | null): number {
-  if (!checkin || !checkout) return 0;
-  return parseFloat(((checkout.getTime() - checkin.getTime()) / 3_600_000).toFixed(2));
+const SHIFT_SELECT = {
+  id: true, name: true, startTime: true, endTime: true,
+  isCrossDay: true, graceLateMinutes: true, graceEarlyMinutes: true, breakMinutes: true,
+} as const;
+
+/** Recalculate all derived attendance flags from corrected check-in/out + shift. */
+function recomputeFlags(
+  checkin: Date | null,
+  checkout: Date | null,
+  shift: ShiftLike | null,
+): {
+  workingHours: number;
+  isLate: boolean;
+  isEarlyOut: boolean;
+  isOvertime: boolean;
+  overtimeHours: number;
+} {
+  if (!checkin || !shift) {
+    return { workingHours: 0, isLate: false, isEarlyOut: false, isOvertime: false, overtimeHours: 0 };
+  }
+  const flags = computeSessionFlags(checkin, checkout, shift);
+  return {
+    workingHours: flags.workingHours,
+    isLate: flags.isLate,
+    isEarlyOut: flags.isEarlyOut,
+    isOvertime: flags.isOvertime,
+    overtimeHours: flags.overtimeHours,
+  };
 }
 
 @Injectable()
@@ -28,16 +55,43 @@ export class AttendanceCorrectionService {
 
   async create(dto: CreateCorrectionDto, employeeId: number) {
     return this.prisma.$transaction(async (tx) => {
-      const attendance = await tx.attendance.findUnique({
-        where: { id: dto.attendanceId },
-      });
-      if (!attendance) throw new NotFoundException('Attendance record not found');
-      if (attendance.employeeId !== employeeId)
-        throw new ForbiddenException('Not your attendance record');
+      let attendance: any;
+
+      if (dto.attendanceId) {
+        // Normal path: correct an existing record
+        attendance = await tx.attendance.findUnique({ where: { id: dto.attendanceId } });
+        if (!attendance) throw new NotFoundException('Attendance record not found');
+        if (attendance.employeeId !== employeeId)
+          throw new ForbiddenException('Not your attendance record');
+      } else if (dto.date) {
+        // No record path: find or create an empty attendance record for this date
+        const dateObj = new Date(dto.date);
+        dateObj.setUTCHours(0, 0, 0, 0);
+        // If shiftId provided, filter to that specific shift record (CC employees with multiple shifts per day)
+        const shiftFilter = dto.shiftId !== undefined ? { shiftId: dto.shiftId } : {};
+        attendance = await tx.attendance.findFirst({
+          where: { employeeId, date: dateObj, ...shiftFilter },
+        });
+        if (!attendance) {
+          // Create empty record so the correction has something to reference
+          attendance = await tx.attendance.create({
+            data: {
+              employeeId,
+              date: dateObj,
+              shiftId: dto.shiftId ?? null,
+              isLate: false,
+              isEarlyOut: false,
+              isOvertime: false,
+            },
+          });
+        }
+      } else {
+        throw new BadRequestException('Provide either attendanceId or date');
+      }
 
       const activeCorrection = await tx.attendanceCorrectionRequest.findFirst({
         where: {
-          attendanceId: dto.attendanceId,
+          attendanceId: attendance.id,
           status: CORRECTION_STATUS.PENDING,
         },
       });
@@ -49,7 +103,7 @@ export class AttendanceCorrectionService {
       const request = await tx.attendanceCorrectionRequest.create({
         data: {
           employeeId,
-          attendanceId: dto.attendanceId,
+          attendanceId: attendance.id,
           requestedCheckinTime: dto.requestedCheckinTime
             ? new Date(dto.requestedCheckinTime)
             : null,
@@ -82,19 +136,25 @@ export class AttendanceCorrectionService {
       const attendance = await tx.attendance.findUnique({ where: { id: req.attendanceId } });
       if (!attendance) throw new NotFoundException('Attendance record not found');
 
-      const newCheckin = req.requestedCheckinTime ?? attendance.checkinTime;
+      const newCheckin  = req.requestedCheckinTime  ?? attendance.checkinTime;
       const newCheckout = req.requestedCheckoutTime ?? attendance.checkoutTime;
-      const workingHours = computeWorkingHours(newCheckin, newCheckout);
+      const newShiftId  = req.requestedShiftId      ?? attendance.shiftId;
+
+      // Fetch shift to recalculate isLate, isEarlyOut, workingHours correctly
+      const shift = newShiftId
+        ? await tx.shift.findUnique({ where: { id: newShiftId }, select: SHIFT_SELECT })
+        : null;
+      const flags = recomputeFlags(newCheckin, newCheckout, shift);
 
       await tx.attendance.update({
         where: { id: attendance.id },
         data: {
-          checkinTime: newCheckin,
+          checkinTime:  newCheckin,
           checkoutTime: newCheckout,
-          checkinNote: req.requestedCheckinNote ?? attendance.checkinNote,
+          checkinNote:  req.requestedCheckinNote  ?? attendance.checkinNote,
           checkoutNote: req.requestedCheckoutNote ?? attendance.checkoutNote,
-          shiftId: req.requestedShiftId ?? attendance.shiftId,
-          workingHours,
+          shiftId: newShiftId,
+          ...flags,
           isCorrected: true,
           correctionRequestId: req.id,
         },
@@ -158,11 +218,15 @@ export class AttendanceCorrectionService {
       const attendance = await tx.attendance.findUnique({ where: { id: attendanceId } });
       if (!attendance) throw new NotFoundException('Attendance record not found');
 
-      const newCheckin = dto.checkinTime ? new Date(dto.checkinTime) : attendance.checkinTime;
-      const newCheckout = dto.checkoutTime
-        ? new Date(dto.checkoutTime)
-        : attendance.checkoutTime;
-      const workingHours = computeWorkingHours(newCheckin, newCheckout);
+      const newCheckin  = dto.checkinTime  ? new Date(dto.checkinTime)  : attendance.checkinTime;
+      const newCheckout = dto.checkoutTime ? new Date(dto.checkoutTime) : attendance.checkoutTime;
+      const newShiftId  = dto.shiftId ?? attendance.shiftId;
+
+      // Fetch shift to recalculate isLate, isEarlyOut, workingHours correctly
+      const shift = newShiftId
+        ? await tx.shift.findUnique({ where: { id: newShiftId }, select: SHIFT_SELECT })
+        : null;
+      const flags = recomputeFlags(newCheckin, newCheckout, shift);
 
       // Create auto-approved correction for audit trail
       const correction = await tx.attendanceCorrectionRequest.create({
@@ -189,12 +253,12 @@ export class AttendanceCorrectionService {
       await tx.attendance.update({
         where: { id: attendanceId },
         data: {
-          checkinTime: newCheckin,
+          checkinTime:  newCheckin,
           checkoutTime: newCheckout,
-          checkinNote: dto.checkinNote ?? attendance.checkinNote,
+          checkinNote:  dto.checkinNote  ?? attendance.checkinNote,
           checkoutNote: dto.checkoutNote ?? attendance.checkoutNote,
-          shiftId: dto.shiftId ?? attendance.shiftId,
-          workingHours,
+          shiftId: newShiftId,
+          ...flags,
           isCorrected: true,
           correctionRequestId: correction.id,
         },
@@ -232,7 +296,8 @@ export class AttendanceCorrectionService {
           employee: { select: { id: true, fullName: true, code: true } },
           reviewer: { select: { id: true, fullName: true } },
           attendance: { select: { id: true, date: true } },
-          requestedShift: { select: { id: true, name: true } },
+          requestedShift: { select: { id: true, name: true, startTime: true, endTime: true } },
+          originalShift:  { select: { id: true, name: true, startTime: true, endTime: true } },
         },
       }),
     ]);
@@ -253,7 +318,8 @@ export class AttendanceCorrectionService {
         employee: { select: { id: true, fullName: true, code: true } },
         reviewer: { select: { id: true, fullName: true } },
         attendance: { select: { id: true, date: true } },
-        requestedShift: { select: { id: true, name: true } },
+        requestedShift: { select: { id: true, name: true, startTime: true, endTime: true } },
+        originalShift:  { select: { id: true, name: true, startTime: true, endTime: true } },
       },
     });
     if (!req) throw new NotFoundException('Correction request not found');

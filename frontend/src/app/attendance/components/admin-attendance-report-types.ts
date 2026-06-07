@@ -71,7 +71,12 @@ export interface DayCell {
   lateMinutes?: number;
   earlyMinutes?: number;
   otHours?: number;
-  note?: string;
+  note?: string;           // holiday name or general note
+  checkinNote?: string | null;
+  checkoutNote?: string | null;
+  locationNote?: string | null;
+  correctionReason?: string | null;   // reason from latest correction request
+  correctionReviewNote?: string | null; // reviewer's note
   isHoliday?: boolean;
   holidayName?: string;
   attendanceId?: number;

@@ -33,3 +33,7 @@ backend/node_modules/
 frontend/node_modules/
 /.claude
 /.opencode
+/docs
+
+.env.prod
+.env.staging
