@@ -1,9 +1,11 @@
 /**
  * AttendanceExportGridService — Excel grid export (employee × day matrix).
  *
- * Grid cell shows S/C (Sáng/Chiều) check marks for each day.
- * For multi-shift days: workingHours = SUM across all sessions that day.
- * Earliest check-in / latest checkout are used for display.
+ * Grid cell shows S/C/T (Sáng/Chiều/Tối) check marks for each day.
+ * Shift slot classification by shift.startTime:
+ *   S (Sáng)   : startTime < "12:00"
+ *   C (Chiều)  : "12:00" <= startTime < "18:00"
+ *   T (Tối)    : startTime >= "18:00"
  * Also adds a "Báo Cáo Ngày Công" summary sheet for ca cố định.
  */
 import { Injectable } from '@nestjs/common';
@@ -18,13 +20,25 @@ import { buildFixedSummarySheet } from './attendance-export-fixed-summary-sheet'
 const localDateStr = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** Aggregated day slot for grid lookup */
+/** Per-shift-slot presence for one employee × day */
+interface ShiftSlot { present: boolean; isLeave: boolean; }
+
+/** Aggregated day slots: S / C / T per (employeeId, date) */
 interface DaySlot {
-  checkinTime: Date | null;
-  checkoutTime: Date | null;
-  isOnLeave: boolean;
-  totalWorkingHours: number;
-  sessionsCount: number;
+  S: ShiftSlot;
+  C: ShiftSlot;
+  T: ShiftSlot;
+  isOnLeave: boolean; // any slot is leave → whole day is leave
+}
+
+/** Classify shift to S/C/T by startTime (HH:MM string) */
+function classifyShift(startTime: string | undefined | null): 'S' | 'C' | 'T' {
+  if (!startTime) return 'S'; // fallback to morning
+  const [h, m] = startTime.split(':').map(Number);
+  const mins = h * 60 + (m || 0);
+  if (mins < 12 * 60) return 'S';   // before 12:00 → Sáng
+  if (mins < 18 * 60) return 'C';   // 12:00–17:59 → Chiều
+  return 'T';                        // 18:00+ → Tối
 }
 
 @Injectable()
@@ -72,36 +86,22 @@ export class AttendanceExportGridService {
       (a.code || '').localeCompare(b.code || ''),
     );
 
-    // Aggregate all sessions per (employeeId, date) → DaySlot
+    // Aggregate sessions per (employeeId, date) → DaySlot with S/C/T slots
+    const emptySlot = (): ShiftSlot => ({ present: false, isLeave: false });
+    const emptyDay = (): DaySlot => ({ S: emptySlot(), C: emptySlot(), T: emptySlot(), isOnLeave: false });
+
     const lookup = new Map<string, DaySlot>();
     records.forEach((r: any) => {
       const key = `${r.employeeId}_${localDateStr(new Date(r.date))}`;
-      const existing = lookup.get(key);
-      const rHours = r.workingHours ? Number(r.workingHours) : 0;
+      if (!lookup.has(key)) lookup.set(key, emptyDay());
+      const day = lookup.get(key)!;
 
-      if (!existing) {
-        lookup.set(key, {
-          checkinTime: r.checkinTime ? new Date(r.checkinTime) : null,
-          checkoutTime: r.checkoutTime ? new Date(r.checkoutTime) : null,
-          isOnLeave: !!r.isOnLeave,
-          totalWorkingHours: rHours,
-          sessionsCount: 1,
-        });
-      } else {
-        // Earliest check-in across sessions
-        if (r.checkinTime) {
-          const t = new Date(r.checkinTime);
-          if (!existing.checkinTime || t < existing.checkinTime) existing.checkinTime = t;
-        }
-        // Latest checkout across sessions
-        if (r.checkoutTime) {
-          const t = new Date(r.checkoutTime);
-          if (!existing.checkoutTime || t > existing.checkoutTime) existing.checkoutTime = t;
-        }
-        existing.isOnLeave = existing.isOnLeave || !!r.isOnLeave;
-        // Sum working hours across all sessions (key fix for multi-shift)
-        existing.totalWorkingHours += rHours;
-        existing.sessionsCount += 1;
+      const slot = classifyShift(r.shift?.startTime);
+      if (r.isOnLeave) {
+        day.S.isLeave = day.C.isLeave = day.T.isLeave = true;
+        day.isOnLeave = true;
+      } else if (r.checkinTime || r.checkoutTime) {
+        day[slot].present = true;
       }
     });
 
@@ -109,7 +109,7 @@ export class AttendanceExportGridService {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Bảng Chấm Công');
 
-    const FIX = 3; // fixed columns: STT, HỌ VÀ TÊN, Chức vụ
+    const FIX = 4; // fixed columns: STT, HỌ VÀ TÊN, Chức vụ, Phòng ban (matches grid header)
     const thin = { style: 'thin' as const };
     const border = { top: thin, left: thin, bottom: thin, right: thin };
     const sunFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFC7CE' } };
@@ -130,36 +130,40 @@ export class AttendanceExportGridService {
     ws.getColumn(1).width = 5;
     ws.getColumn(2).width = 22;
     ws.getColumn(3).width = 14;
+    ws.getColumn(4).width = 20;
     [1, 2, 3].forEach((r) => { ws.getRow(r).height = 18; });
 
-    // Header row 1–3: fixed columns
-    ['STT', 'HỌ VÀ TÊN', 'Chức vụ'].forEach((label, ci) => {
+    // Header row 1–3: fixed columns (STT / HỌ VÀ TÊN / Chức vụ / Phòng ban)
+    ['STT', 'HỌ VÀ TÊN', 'Chức vụ', 'Phòng ban'].forEach((label, ci) => {
       ws.mergeCells(1, ci + 1, 3, ci + 1);
       applyCell(ws.getCell(1, ci + 1), label, { font: { bold: true, size: 9 } });
     });
 
-    // Day columns: 2 sub-columns each (S / C)
+    // Day columns: 3 sub-columns each (S / C / T)
     days.forEach((day, i) => {
-      const colS = FIX + 1 + i * 2;
+      const colS = FIX + 1 + i * 3; // 3 sub-cols per day
       const dow = day.getDay();
       const isSun = dow === 0;
       const dowLabel = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][dow];
       const sunFont = { bold: true, size: 9, color: { argb: 'FFCC0000' } };
       const normFont = { bold: true, size: 9 };
 
-      ws.mergeCells(1, colS, 1, colS + 1);
+      // Row 1: day-of-week label spans 3 sub-cols
+      ws.mergeCells(1, colS, 1, colS + 2);
       applyCell(ws.getCell(1, colS), dowLabel, {
         font: isSun ? sunFont : normFont,
         ...(isSun && { fill: sunFill }),
       });
 
-      ws.mergeCells(2, colS, 2, colS + 1);
+      // Row 2: date number spans 3 sub-cols
+      ws.mergeCells(2, colS, 2, colS + 2);
       applyCell(ws.getCell(2, colS), String(day.getDate()).padStart(2, '0'), {
         font: isSun ? sunFont : normFont,
         ...(isSun && { fill: sunFill }),
       });
 
-      ['S', 'C'].forEach((sc, si) => {
+      // Row 3: S / C / T labels
+      ['S', 'C', 'T'].forEach((sc, si) => {
         const col = colS + si;
         ws.getColumn(col).width = 4;
         applyCell(ws.getCell(3, col), sc, {
@@ -174,7 +178,7 @@ export class AttendanceExportGridService {
       const row = ws.getRow(4 + idx);
       row.height = 16;
 
-      [idx + 1, emp.fullName || '', emp.position?.name || ''].forEach((v, ci) => {
+      [idx + 1, emp.fullName || '', emp.position?.name || '', emp.department?.name || ''].forEach((v, ci) => {
         applyCell(row.getCell(ci + 1), v, {
           alignment: { horizontal: ci === 0 ? 'center' : 'left', vertical: 'middle' },
           font: { size: 9 },
@@ -183,24 +187,19 @@ export class AttendanceExportGridService {
 
       days.forEach((day, di) => {
         const ds = localDateStr(day);
-        const slot = lookup.get(`${emp.id}_${ds}`);
-        const colS = FIX + 1 + di * 2;
+        const daySlot = lookup.get(`${emp.id}_${ds}`);
+        const colS = FIX + 1 + di * 3; // 3 sub-cols per day
         const isSun = day.getDay() === 0;
+        const isLeave = daySlot?.isOnLeave ?? false;
 
-        let sVal = '', cVal = '', isLeave = false;
-        if (slot) {
-          if (slot.isOnLeave) {
-            sVal = 'P'; cVal = 'P'; isLeave = true;
-          } else {
-            // S column: checkin present; C column: checkout present
-            if (slot.checkinTime) sVal = '/';
-            if (slot.checkoutTime) cVal = '/';
-            // Multi-shift indicator: show session count if > 1
-            if (slot.sessionsCount > 1 && slot.checkinTime) sVal = `/${slot.sessionsCount}`;
-          }
-        }
+        // Compute display value for each shift slot
+        const vals: string[] = (['S', 'C', 'T'] as const).map((k) => {
+          if (!daySlot) return '';
+          if (daySlot[k].isLeave) return 'P';
+          return daySlot[k].present ? '/' : '';
+        });
 
-        [sVal, cVal].forEach((v, si) => {
+        vals.forEach((v, si) => {
           const cell = row.getCell(colS + si);
           applyCell(cell, v, {
             font: isLeave
