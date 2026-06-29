@@ -21,7 +21,7 @@ const localDateStr = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** Per-shift-slot presence for one employee × day */
-interface ShiftSlot { present: boolean; isLeave: boolean; }
+interface ShiftSlot { present: boolean; isLeave: boolean; isCorrected: boolean; }
 
 /** Aggregated day slots: S / C / T per (employeeId, date) */
 interface DaySlot {
@@ -87,7 +87,7 @@ export class AttendanceExportGridService {
     );
 
     // Aggregate sessions per (employeeId, date) → DaySlot with S/C/T slots
-    const emptySlot = (): ShiftSlot => ({ present: false, isLeave: false });
+    const emptySlot = (): ShiftSlot => ({ present: false, isLeave: false, isCorrected: false });
     const emptyDay = (): DaySlot => ({ S: emptySlot(), C: emptySlot(), T: emptySlot(), isOnLeave: false });
 
     const lookup = new Map<string, DaySlot>();
@@ -103,6 +103,7 @@ export class AttendanceExportGridService {
       } else if (r.checkinTime || r.checkoutTime) {
         day[slot].present = true;
       }
+      if (r.isCorrected) day[slot].isCorrected = true;
     });
 
     // ── Build Excel workbook ──────────────────────────────────────────────────
@@ -114,6 +115,8 @@ export class AttendanceExportGridService {
     const border = { top: thin, left: thin, bottom: thin, right: thin };
     const sunFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFC7CE' } };
     const leaveFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFFF00' } };
+    // light purple for corrected shifts
+    const correctedFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE8D0FF' } };
 
     const applyCell = (
       cell: ExcelJS.Cell,
@@ -173,6 +176,9 @@ export class AttendanceExportGridService {
       });
     });
 
+    // Track per-column totals (column index → count of '/' marks)
+    const colTotals = new Map<number, number>();
+
     // Data rows
     employees.forEach((emp, idx) => {
       const row = ws.getRow(4 + idx);
@@ -192,21 +198,51 @@ export class AttendanceExportGridService {
         const isSun = day.getDay() === 0;
         const isLeave = daySlot?.isOnLeave ?? false;
 
-        // Compute display value for each shift slot
-        const vals: string[] = (['S', 'C', 'T'] as const).map((k) => {
-          if (!daySlot) return '';
-          if (daySlot[k].isLeave) return 'P';
-          return daySlot[k].present ? '/' : '';
-        });
+        (['S', 'C', 'T'] as const).forEach((k, si) => {
+          const col = colS + si;
+          let val = '';
+          if (daySlot) {
+            if (daySlot[k].isLeave) val = 'P';
+            else if (daySlot[k].present) val = '/';
+          }
 
-        vals.forEach((v, si) => {
-          const cell = row.getCell(colS + si);
-          applyCell(cell, v, {
+          if (val === '/') colTotals.set(col, (colTotals.get(col) ?? 0) + 1);
+
+          const isCorrected = daySlot?.[k].isCorrected ?? false;
+          const cell = row.getCell(col);
+          applyCell(cell, val, {
             font: isLeave
               ? { bold: true, size: 9, color: { argb: 'FFCC6600' } }
               : { size: 9 },
-            ...(isLeave ? { fill: leaveFill } : isSun ? { fill: sunFill } : {}),
+            // Priority: corrected > leave > sunday
+            ...(isCorrected ? { fill: correctedFill } : isLeave ? { fill: leaveFill } : isSun ? { fill: sunFill } : {}),
           });
+        });
+      });
+    });
+
+    // Totals row — sum of '/' (present) marks per shift-slot column
+    const totalRowIdx = 4 + employees.length;
+    const totalRow = ws.getRow(totalRowIdx);
+    totalRow.height = 18;
+
+    // Fixed columns label
+    ws.mergeCells(totalRowIdx, 1, totalRowIdx, FIX);
+    applyCell(totalRow.getCell(1), 'Tổng ca làm việc', {
+      font: { bold: true, size: 9 },
+      alignment: { horizontal: 'center', vertical: 'middle' },
+    });
+
+    // Fill total count per shift-slot column
+    days.forEach((day, di) => {
+      const colS = FIX + 1 + di * 3;
+      const isSun = day.getDay() === 0;
+      (['S', 'C', 'T'] as const).forEach((_k, si) => {
+        const col = colS + si;
+        const total = colTotals.get(col) ?? 0;
+        applyCell(totalRow.getCell(col), total || '', {
+          font: { bold: true, size: 9, ...(isSun ? { color: { argb: 'FFCC0000' } } : {}) },
+          ...(isSun ? { fill: sunFill } : {}),
         });
       });
     });

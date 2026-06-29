@@ -57,7 +57,10 @@ function deriveShiftType(shift?: { name?: string; startTime?: string } | null): 
  * Grid slot for SHIFT-mode (CC): tracks S/C/T presence per (employee, date).
  * Classification by shift.startTime: S < 12:00, C 12–18, T ≥ 18.
  */
-interface ShiftDaySlot { S: boolean; C: boolean; T: boolean; isOnLeave: boolean; }
+interface ShiftDaySlot {
+  S: boolean; C: boolean; T: boolean; isOnLeave: boolean;
+  corrected: { S: boolean; C: boolean; T: boolean };
+}
 
 function classifyShiftSCT(startTime?: string | null): 'S' | 'C' | 'T' {
   if (!startTime) return 'S';
@@ -69,9 +72,10 @@ function classifyShiftSCT(startTime?: string | null): 'S' | 'C' | 'T' {
 }
 
 const thin = { style: 'thin' as const };
-const BORDER = { top: thin, left: thin, bottom: thin, right: thin };
-const SUN_FILL  = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFC7CE' } };
-const LEAVE_FILL = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFFF00' } };
+const BORDER         = { top: thin, left: thin, bottom: thin, right: thin };
+const SUN_FILL       = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFDE8E8' } };
+const LEAVE_FILL     = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFFFFF00' } };
+const CORRECTED_FILL = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFE8D0FF' } };
 
 @Injectable()
 export class AttendanceExportCombinedService {
@@ -164,13 +168,14 @@ export class AttendanceExportCombinedService {
     if (workingMode === 'SHIFT') {
       records.forEach((r: any) => {
         const key = `${r.employeeId}_${localDateStr(new Date(r.date))}`;
-        if (!shiftLookup.has(key)) shiftLookup.set(key, { S: false, C: false, T: false, isOnLeave: false });
+        if (!shiftLookup.has(key)) shiftLookup.set(key, { S: false, C: false, T: false, isOnLeave: false, corrected: { S: false, C: false, T: false } });
         const s = shiftLookup.get(key)!;
         if (r.isOnLeave) {
           s.isOnLeave = true;
         } else if (r.checkinTime || r.checkoutTime) {
           const slot = classifyShiftSCT(r.shift?.startTime);
           s[slot] = true;
+          if (r.isCorrected) s.corrected[slot] = true;
         }
       });
     }
@@ -272,8 +277,16 @@ export class AttendanceExportCombinedService {
     });
 
     // ── Build workbook ────────────────────────────────────────────────────────
+    // Pre-compute corrected days for FIXED mode (empId_date keys)
+    const fixedCorrectedSet = new Set<string>();
+    if (workingMode === 'FIXED') {
+      records.forEach((r: any) => {
+        if (r.isCorrected) fixedCorrectedSet.add(`${r.employeeId}_${localDateStr(new Date(r.date))}`);
+      });
+    }
+
     const wb = new ExcelJS.Workbook();
-    this.addGridSheet(wb, employees, days, lookup, workingMode, shiftLookup);
+    this.addGridSheet(wb, employees, days, lookup, workingMode, shiftLookup, fixedCorrectedSet);
     this.addSummarySheet(wb, summaries, start, end, officialWorkingDays, officialHolidayDays, workingMode);
 
     const month = String(start.getMonth() + 1).padStart(2, '0');
@@ -296,6 +309,7 @@ export class AttendanceExportCombinedService {
     lookup: Map<string, DaySlot>,
     workingMode: 'FIXED' | 'SHIFT',
     shiftLookup: Map<string, ShiftDaySlot>,
+    fixedCorrectedSet: Set<string>,
   ) {
     const ws  = wb.addWorksheet('Bảng Chấm Công');
     const FIX = 4; // STT | HỌ VÀ TÊN | Chức vụ | Phòng ban
@@ -316,24 +330,35 @@ export class AttendanceExportCombinedService {
       applyCell(ws.getCell(1, ci + 1), label, { bold: true, size: 9 });
     });
 
+    // Alternating day-group fill by day index (di % 2) — lowest priority, purely visual separation.
+    // CN overrides with SUN_FILL regardless of index.
+    const ALT_DAY_FILL = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF0F4F8' } };
+
     const subLabels = workingMode === 'SHIFT' ? ['S', 'C', 'T'] : ['S', 'C'];
     days.forEach((day, i) => {
       const colS = FIX + 1 + i * SUB, dow = day.getDay(), isSun = dow === 0;
       const dowLabel = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][dow];
       const fSun  = { bold: true, size: 9, color: { argb: 'FFCC0000' } };
       const fNorm = { bold: true, size: 9 };
+      const isSat = dow === 6;
+      const isWeekend = isSun || (workingMode === 'FIXED' && isSat);
+      const headerFill = isWeekend ? SUN_FILL : (i % 2 === 1 ? ALT_DAY_FILL : undefined);
+      const fHeader = isWeekend ? fSun : fNorm;
       // Row 1: day-of-week label spans SUB sub-cols
       ws.mergeCells(1, colS, 1, colS + SUB - 1);
-      applyCell(ws.getCell(1, colS), dowLabel, isSun ? fSun : fNorm, isSun ? SUN_FILL : undefined);
+      applyCell(ws.getCell(1, colS), dowLabel, fHeader, headerFill);
       // Row 2: date number spans SUB sub-cols
       ws.mergeCells(2, colS, 2, colS + SUB - 1);
-      applyCell(ws.getCell(2, colS), String(day.getDate()).padStart(2, '0'), isSun ? fSun : fNorm, isSun ? SUN_FILL : undefined);
+      applyCell(ws.getCell(2, colS), String(day.getDate()).padStart(2, '0'), fHeader, headerFill);
       // Row 3: sub-column labels
       subLabels.forEach((sc, si) => {
         ws.getColumn(colS + si).width = 4;
-        applyCell(ws.getCell(3, colS + si), sc, isSun ? fSun : fNorm, isSun ? SUN_FILL : undefined);
+        applyCell(ws.getCell(3, colS + si), sc, fHeader, headerFill);
       });
     });
+
+    // Track per-column totals for the totals row (col index → count of '/' marks)
+    const colTotals = new Map<number, number>();
 
     employees.forEach((emp, idx) => {
       const row = ws.getRow(4 + idx); row.height = 16;
@@ -341,26 +366,31 @@ export class AttendanceExportCombinedService {
         applyCell(row.getCell(ci + 1), v, { size: 9 }, undefined, { horizontal: ci === 0 ? 'center' : 'left', vertical: 'middle' });
       });
       days.forEach((day, di) => {
-        const ds  = localDateStr(day);
+        const ds    = localDateStr(day);
         const colS  = FIX + 1 + di * SUB;
         const isSun = day.getDay() === 0;
 
-        let vals: string[];
-        let isLeave = false;
+        const isSat2 = day.getDay() === 6;
+        const dayFill = (isSun || (workingMode === 'FIXED' && isSat2)) ? SUN_FILL : (di % 2 === 1 ? ALT_DAY_FILL : undefined);
 
         if (workingMode === 'SHIFT') {
-          // CC: S/C/T columns — presence per shift slot
           const s = shiftLookup.get(`${emp.id}_${ds}`);
-          isLeave = s?.isOnLeave ?? false;
-          vals = (['S', 'C', 'T'] as const).map((k) => {
-            if (!s) return '';
-            if (s.isOnLeave) return 'P';
-            return s[k] ? '/' : '';
+          const isLeave = s?.isOnLeave ?? false;
+          (['S', 'C', 'T'] as const).forEach((k, si) => {
+            let val = '';
+            if (s) { val = s.isOnLeave ? 'P' : s[k] ? '/' : ''; }
+            if (val === '/') colTotals.set(colS + si, (colTotals.get(colS + si) ?? 0) + 1);
+            const isCorrected = s?.corrected[k] ?? false;
+            applyCell(row.getCell(colS + si), val,
+              isLeave ? { bold: true, size: 9, color: { argb: 'FFCC6600' } } : { size: 9 },
+              isCorrected ? CORRECTED_FILL : isLeave ? LEAVE_FILL : dayFill,
+            );
           });
         } else {
           // FIXED: S=checkin, C=checkout
           const slot = lookup.get(`${emp.id}_${ds}`);
-          isLeave = slot?.isOnLeave ?? false;
+          const isLeave     = slot?.isOnLeave ?? false;
+          const isCorrected = fixedCorrectedSet.has(`${emp.id}_${ds}`);
           let sVal = '', cVal = '';
           if (slot) {
             if (slot.isOnLeave) { sVal = 'P'; cVal = 'P'; }
@@ -369,17 +399,39 @@ export class AttendanceExportCombinedService {
               if (slot.checkoutTime) cVal = '/';
             }
           }
-          vals = [sVal, cVal];
+          if (sVal === '/') colTotals.set(colS,     (colTotals.get(colS)     ?? 0) + 1);
+          if (cVal === '/') colTotals.set(colS + 1, (colTotals.get(colS + 1) ?? 0) + 1);
+          [sVal, cVal].forEach((v, si) => {
+            applyCell(row.getCell(colS + si), v,
+              isLeave ? { bold: true, size: 9, color: { argb: 'FFCC6600' } } : { size: 9 },
+              isCorrected ? CORRECTED_FILL : isLeave ? LEAVE_FILL : dayFill,
+            );
+          });
         }
-
-        vals.forEach((v, si) => {
-          applyCell(row.getCell(colS + si), v,
-            isLeave ? { bold: true, size: 9, color: { argb: 'FFCC6600' } } : { size: 9 },
-            isLeave ? LEAVE_FILL : isSun ? SUN_FILL : undefined,
-          );
-        });
       });
     });
+
+    // Totals row — only for SHIFT (CC) mode
+    if (workingMode === 'SHIFT') {
+      const totalRowIdx = 4 + employees.length;
+      const totalRow = ws.getRow(totalRowIdx);
+      totalRow.height = 18;
+      ws.mergeCells(totalRowIdx, 1, totalRowIdx, FIX);
+      applyCell(totalRow.getCell(1), 'Tổng ca làm việc', { bold: true, size: 9 });
+      days.forEach((day, di) => {
+        const colS  = FIX + 1 + di * SUB;
+        const isSun   = day.getDay() === 0;
+        const dayFill = isSun ? SUN_FILL : (di % 2 === 1 ? ALT_DAY_FILL : undefined);
+        for (let si = 0; si < SUB; si++) {
+          const col   = colS + si;
+          const total = colTotals.get(col) ?? 0;
+          applyCell(totalRow.getCell(col), total || '',
+            { bold: true, size: 9, ...(isSun ? { color: { argb: 'FFCC0000' } } : {}) },
+            dayFill,
+          );
+        }
+      });
+    }
   }
 
   // ── Sheet 2: summary (working-day totals per employee) ───────────────────
