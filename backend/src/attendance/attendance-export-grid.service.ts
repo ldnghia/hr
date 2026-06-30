@@ -53,12 +53,9 @@ export class AttendanceExportGridService {
     user: { id: number; role: string },
     res: Response,
   ) {
-    const start = dto.dateFrom
-      ? new Date(dto.dateFrom)
-      : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const end = dto.dateTo ? new Date(dto.dateTo) : new Date();
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const start = dto.dateFrom ? new Date(dto.dateFrom) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end   = dto.dateTo   ? new Date(dto.dateTo)   : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
     const days: Date[] = [];
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {

@@ -90,10 +90,10 @@ export class AttendanceExportCombinedService {
     user: { id: number; role: string },
     res: Response,
   ) {
-    const start = dto.dateFrom ? new Date(dto.dateFrom) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const end   = dto.dateTo   ? new Date(dto.dateTo)   : new Date();
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
+    // Parse date strings as UTC midnight to avoid local-timezone shift on UTC+7 servers.
+    const now = new Date();
+    const start = dto.dateFrom ? new Date(dto.dateFrom) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end   = dto.dateTo   ? new Date(dto.dateTo)   : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
     // Build days array for the period
     const days: Date[] = [];
