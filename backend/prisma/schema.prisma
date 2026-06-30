@@ -341,6 +341,7 @@ model Attendance {
   isCorrected         Boolean   @default(false) @map("is_corrected")
   correctionRequestId Int?      @unique @map("correction_request_id")
   isUnknownDevice     Boolean   @default(false) @map("is_unknown_device")
+  deletedAt           DateTime? @map("deleted_at")
   employee            Employee? @relation(fields: [employeeId], references: [id])
   shift               Shift?    @relation(fields: [shiftId], references: [id])
   corrections         AttendanceCorrectionRequest[] @relation("AttendanceToCorrections")
