@@ -59,7 +59,7 @@ export class AttendanceCorrectionService {
 
       if (dto.attendanceId) {
         // Normal path: correct an existing record
-        attendance = await tx.attendance.findUnique({ where: { id: dto.attendanceId } });
+        attendance = await tx.attendance.findFirst({ where: { id: dto.attendanceId, deletedAt: null } });
         if (!attendance) throw new NotFoundException('Attendance record not found');
         if (attendance.employeeId !== employeeId)
           throw new ForbiddenException('Not your attendance record');
@@ -70,7 +70,7 @@ export class AttendanceCorrectionService {
         // If shiftId provided, filter to that specific shift record (CC employees with multiple shifts per day)
         const shiftFilter = dto.shiftId !== undefined ? { shiftId: dto.shiftId } : {};
         attendance = await tx.attendance.findFirst({
-          where: { employeeId, date: dateObj, ...shiftFilter },
+          where: { employeeId, date: dateObj, deletedAt: null, ...shiftFilter },
         });
         if (!attendance) {
           // Create empty record so the correction has something to reference
@@ -133,8 +133,8 @@ export class AttendanceCorrectionService {
     return this.prisma.$transaction(async (tx) => {
       const req = await this.findPendingOrThrow(tx, id);
 
-      const attendance = await tx.attendance.findUnique({ where: { id: req.attendanceId } });
-      if (!attendance) throw new NotFoundException('Attendance record not found');
+      const attendance = await tx.attendance.findFirst({ where: { id: req.attendanceId, deletedAt: null } });
+      if (!attendance) throw new NotFoundException('Attendance record not found or has been deleted');
 
       const newCheckin  = req.requestedCheckinTime  ?? attendance.checkinTime;
       const newCheckout = req.requestedCheckoutTime ?? attendance.checkoutTime;
@@ -215,8 +215,8 @@ export class AttendanceCorrectionService {
 
   async adminEdit(attendanceId: number, adminId: number, dto: AdminEditAttendanceDto) {
     return this.prisma.$transaction(async (tx) => {
-      const attendance = await tx.attendance.findUnique({ where: { id: attendanceId } });
-      if (!attendance) throw new NotFoundException('Attendance record not found');
+      const attendance = await tx.attendance.findFirst({ where: { id: attendanceId, deletedAt: null } });
+      if (!attendance) throw new NotFoundException('Attendance record not found or has been deleted');
 
       const newCheckin  = dto.checkinTime  ? new Date(dto.checkinTime)  : attendance.checkinTime;
       const newCheckout = dto.checkoutTime ? new Date(dto.checkoutTime) : attendance.checkoutTime;

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationDto, paginate, buildPaginatedResponse } from '../common/dto/pagination.dto';
 import { ReportAttendanceDto } from './dto/report-attendance.dto';
@@ -39,6 +39,7 @@ export class AttendanceQueryService {
       this.prisma.attendance.findMany({
         where: {
           employeeId,
+          deletedAt: null,
           OR: [
             { date: today },
             // Cross-day shifts (e.g. 23:00–07:00): session date = yesterday but still open
@@ -70,7 +71,7 @@ export class AttendanceQueryService {
     const end = new Date(Date.UTC(year, month, 0));
 
     const records = await this.prisma.attendance.findMany({
-      where: { employeeId, date: { gte: start, lte: end } },
+      where: { employeeId, date: { gte: start, lte: end }, deletedAt: null },
       include: { shift: true },
       orderBy: { date: 'asc' },
     });
@@ -103,7 +104,7 @@ export class AttendanceQueryService {
     const { page = 1, limit = 20, employeeId, date } = query;
     const { skip, take } = paginate(page, limit);
 
-    const where: any = {};
+    const where: any = { deletedAt: null };
     if (employeeId) where.employeeId = employeeId;
     if (date) where.date = new Date(date);
 
@@ -134,7 +135,7 @@ export class AttendanceQueryService {
     const { page = 1, limit = 20, dateFrom, dateTo } = query;
     const { skip, take } = paginate(page, limit);
 
-    const where: any = { employeeId };
+    const where: any = { employeeId, deletedAt: null };
     if (dateFrom || dateTo) {
       where.date = {};
       if (dateFrom) where.date.gte = new Date(dateFrom);
@@ -167,7 +168,7 @@ export class AttendanceQueryService {
     const start = from ? new Date(from) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const end = to ? new Date(to) : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
 
-    const where: any = { date: { gte: start, lte: end } };
+    const where: any = { date: { gte: start, lte: end }, deletedAt: null };
 
     // RBAC scoping
     if (requestingUser.role === 'employee') {
@@ -226,6 +227,7 @@ export class AttendanceQueryService {
         checkoutTime: null,
         forgotCheckout: false,
         date: { lt: todayUtc },
+        deletedAt: null,
       },
       include: {
         shift: { select: { id: true, name: true, startTime: true, endTime: true, isCrossDay: true } },
@@ -359,7 +361,7 @@ export class AttendanceQueryService {
     } = dto;
     const { skip, take } = paginate(page, limit);
 
-    const where: any = { AND: [] };
+    const where: any = { AND: [{ deletedAt: null }] };
 
     // RBAC scoping
     if (user.role === 'manager') {
@@ -427,5 +429,18 @@ export class AttendanceQueryService {
         totalWorkingHours: parseFloat(totalWorkingHours.toFixed(2)),
       },
     };
+  }
+
+  // ─── Soft delete (admin only) ─────────────────────────────────────────────
+
+  async deleteAttendance(id: number): Promise<void> {
+    const record = await this.prisma.attendance.findUnique({ where: { id } });
+    if (!record) throw new NotFoundException(`Attendance record #${id} not found`);
+    if (record.deletedAt) throw new BadRequestException(`Attendance record #${id} already deleted`);
+
+    await this.prisma.attendance.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

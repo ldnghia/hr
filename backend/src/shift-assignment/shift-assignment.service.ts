@@ -275,6 +275,7 @@ export class ShiftAssignmentService {
       where: {
         employeeId: asgn.employeeId,
         shiftId: asgn.shiftId,
+        deletedAt: null,
         date: {
           gte: new Date(asgn.year, asgn.month - 1, 1),
           lte: new Date(asgn.year, asgn.month, 0),

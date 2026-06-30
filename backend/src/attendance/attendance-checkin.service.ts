@@ -39,9 +39,9 @@ export class AttendanceCheckinService {
     const shift = await this.shiftResolver.resolveTargetShift(employeeId, ts, dto.shiftId);
     const shiftId = shift.id;
 
-    // 3. Guard: already checked in for THIS shift session
-    const existing = await this.prisma.attendance.findUnique({
-      where: { employeeId_date_shiftId: { employeeId, date: sessionDate, shiftId } },
+    // 3. Guard: already checked in for THIS shift session (exclude soft-deleted)
+    const existing = await this.prisma.attendance.findFirst({
+      where: { employeeId, date: sessionDate, shiftId, deletedAt: null },
     });
     if (existing?.checkinTime) {
       throw new BadRequestException(`Đã chấm công vào ca "${shift.name}" hôm nay rồi`);
@@ -57,6 +57,7 @@ export class AttendanceCheckinService {
           checkinTime: { not: null },
           checkoutTime: null,
           date: { in: [sessionDate, yesterday] },
+          deletedAt: null,
         },
         include: { shift: { select: { name: true } } },
       });
@@ -148,37 +149,39 @@ export class AttendanceCheckinService {
 
     const unknownDeviceNote = isUnknownDevice ? '[THIẾT BỊ CHƯA ĐĂNG KÝ] ' : '';
 
-    // 9. Upsert attendance row (composite key: employeeId + date + shiftId)
-    const attendance = await this.prisma.attendance.upsert({
-      where: { employeeId_date_shiftId: { employeeId, date: sessionDate, shiftId } },
-      create: {
-        employeeId,
-        date: sessionDate,
-        shiftId,
-        checkinTime: ts,
-        isLate,
-        checkinLat: dto.lat,
-        checkinLng: dto.lng,
-        officeDistanceM,
-        isInOffice,
-        hasLocation: hasGps,
-        checkinNote: unknownDeviceNote + (locationNote ?? ''),
-        locationNote,
-        isUnknownDevice,
-      },
-      update: {
-        checkinTime: ts,
-        isLate,
-        checkinLat: dto.lat,
-        checkinLng: dto.lng,
-        officeDistanceM,
-        isInOffice,
-        hasLocation: hasGps,
-        checkinNote: unknownDeviceNote + (locationNote ?? ''),
-        locationNote,
-        isUnknownDevice,
-      },
+    // 9. Create/restore attendance row (composite key: employeeId + date + shiftId)
+    // Cannot use upsert because a soft-deleted record with the same key would be updated
+    // without clearing deletedAt, causing the new check-in to remain invisible.
+    const checkinData = {
+      checkinTime: ts,
+      isLate,
+      checkinLat: dto.lat,
+      checkinLng: dto.lng,
+      officeDistanceM,
+      isInOffice,
+      hasLocation: hasGps,
+      checkinNote: unknownDeviceNote + (locationNote ?? ''),
+      locationNote,
+      isUnknownDevice,
+    };
+
+    // Check if a soft-deleted record exists for this key — restore it instead of inserting
+    const softDeleted = await this.prisma.attendance.findFirst({
+      where: { employeeId, date: sessionDate, shiftId, deletedAt: { not: null } },
     });
+
+    let attendance;
+    if (softDeleted) {
+      // Restore the soft-deleted record with fresh check-in data
+      attendance = await this.prisma.attendance.update({
+        where: { id: softDeleted.id },
+        data: { ...checkinData, deletedAt: null, checkoutTime: null, workingHours: null },
+      });
+    } else {
+      attendance = await this.prisma.attendance.create({
+        data: { employeeId, date: sessionDate, shiftId, ...checkinData },
+      });
+    }
 
     // 10. Audit log
     await this.prisma.attendanceLog.create({
@@ -219,8 +222,8 @@ export class AttendanceCheckinService {
 
     // Direct lookup by attendanceId — used when closing unclosed sessions from previous days
     if (dto.attendanceId) {
-      const record = await this.prisma.attendance.findUnique({
-        where: { id: dto.attendanceId },
+      const record = await this.prisma.attendance.findFirst({
+        where: { id: dto.attendanceId, deletedAt: null },
         include: { shift: true },
       });
       if (!record) throw new BadRequestException(`Attendance record #${dto.attendanceId} not found`);
@@ -234,14 +237,14 @@ export class AttendanceCheckinService {
 
       // Find open session(s) — check today first, then yesterday (cross-day shifts)
       let openSessions = await this.prisma.attendance.findMany({
-        where: { employeeId, date: sessionDate, checkinTime: { not: null }, checkoutTime: null },
+        where: { employeeId, date: sessionDate, checkinTime: { not: null }, checkoutTime: null, deletedAt: null },
         include: { shift: true },
       });
 
       if (openSessions.length === 0) {
         // Cross-day shift fallback: 23:00–07:00 check-in date = yesterday
         openSessions = await this.prisma.attendance.findMany({
-          where: { employeeId, date: yesterday, checkinTime: { not: null }, checkoutTime: null },
+          where: { employeeId, date: yesterday, checkinTime: { not: null }, checkoutTime: null, deletedAt: null },
           include: { shift: true },
         });
       }
@@ -367,7 +370,7 @@ export class AttendanceCheckinService {
   // ─── Mark forgot checkout (no checkoutTime recorded) ─────────────────────
 
   async markForgotCheckout(employeeId: number, attendanceId: number) {
-    const record = await this.prisma.attendance.findUnique({ where: { id: attendanceId } });
+    const record = await this.prisma.attendance.findFirst({ where: { id: attendanceId, deletedAt: null } });
     if (!record) throw new BadRequestException(`Attendance record #${attendanceId} not found`);
     if (record.employeeId !== employeeId) throw new BadRequestException('Forbidden');
     if (!record.checkinTime) throw new BadRequestException('Record has no check-in time');

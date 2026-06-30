@@ -145,7 +145,7 @@ export class ShiftScheduleService {
 
     // Block if attendance record exists for this employee+shift+date
     const hasAttendance = await this.prisma.attendance.findFirst({
-      where: { employeeId: entry.employeeId, shiftId: entry.shiftId, date: entry.date },
+      where: { employeeId: entry.employeeId, shiftId: entry.shiftId, date: entry.date, deletedAt: null },
     });
     if (hasAttendance) {
       throw new BadRequestException(

@@ -48,7 +48,7 @@ export class AttendanceService {
     const dateOnly = computeSessionDate(ts);
 
     let attendance = await this.prisma.attendance.findFirst({
-      where: { employeeId, date: dateOnly },
+      where: { employeeId, date: dateOnly, deletedAt: null },
     });
 
     if (type === 'check_in') {
@@ -176,6 +176,10 @@ export class AttendanceService {
     query: PaginationDto & { dateFrom?: string; dateTo?: string },
   ) {
     return this.queryService.getMyRecords(employeeId, query);
+  }
+
+  deleteAttendance(id: number) {
+    return this.queryService.deleteAttendance(id);
   }
 
   // ─── Exports ──────────────────────────────────────────────────────────────

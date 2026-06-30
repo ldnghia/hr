@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Query,
   Param,
@@ -277,6 +278,17 @@ export class AttendanceController {
       month ?? now.getMonth() + 1,
       year ?? now.getFullYear(),
     );
+  }
+
+  // ── DELETE /attendance/:id ────────────────────────────────────────────────
+
+  @Delete(':id')
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Soft-delete an attendance record (admin only)' })
+  async deleteAttendance(@Param('id', ParseIntPipe) id: number) {
+    await this.attendanceService.deleteAttendance(id);
+    return { message: 'Attendance record deleted successfully' };
   }
 
   // ══ Shifts ════════════════════════════════════════════════════════════════

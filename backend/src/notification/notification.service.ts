@@ -64,6 +64,7 @@ export class NotificationService {
       where: {
         date: today,
         checkinTime: { not: null },
+        deletedAt: null,
       },
       select: { employeeId: true }
     });
