@@ -79,7 +79,7 @@ export class LeaveBalanceService {
    * Monthly cron: runs at midnight on the 1st of every month.
    * Credits MONTHLY_ACCRUAL_DAYS to every non-resigned employee.
    */
-  @Cron(CronExpression.EVERY_1ST_DAY_OF_MONTH_AT_MIDNIGHT)
+  // @Cron(CronExpression.EVERY_1ST_DAY_OF_MONTH_AT_MIDNIGHT)
   async handleMonthlyAccrual() {
     const now = new Date();
     const note = `Monthly accrual — ${now.toLocaleString('en-GB', { month: 'long', year: 'numeric' })}`;
