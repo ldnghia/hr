@@ -53,11 +53,15 @@ export function computeSessionFlags(
 } {
   const checkinMin = checkinTime.getHours() * 60 + checkinTime.getMinutes();
   const startMin = hhmmToMinutes(shift.startTime);
-  let endMin = hhmmToMinutes(shift.endTime);
+  const rawEndMin = hhmmToMinutes(shift.endTime); // end time without +1440 adjustment
+  let endMin = rawEndMin;
   if (shift.isCrossDay && endMin <= startMin) endMin += 1440;
 
-  // Normalize checkinMin for cross-day shifts
-  const normalCheckin = shift.isCrossDay && checkinMin < startMin ? checkinMin + 1440 : checkinMin;
+  // For cross-day shifts (e.g. 23:00–07:00), a checkin at 01:30 has checkinMin=90 which
+  // belongs to the "next-day" portion of the shift → add 1440 to normalize into shift-space.
+  // A checkin at 22:51 (before shift start) must NOT be normalized — it's an early arrival.
+  // Threshold: only add 1440 when checkinMin falls inside the post-midnight window (< rawEndMin).
+  const normalCheckin = (shift.isCrossDay && checkinMin < rawEndMin) ? checkinMin + 1440 : checkinMin;
   const isLate = normalCheckin > startMin + shift.graceLateMinutes;
 
   if (!checkoutTime) {
