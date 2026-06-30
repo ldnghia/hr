@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   type EmployeeRow, type DayCell, type CellStatus,
   STATUS_META, initials, avatarGradient,
@@ -137,17 +138,132 @@ function MiniCalendar({ cells, year, month, todayDay }: {
   );
 }
 
+// ─── Delete confirm modal ─────────────────────────────────────────────────────
+
+interface DeleteTarget {
+  id: number;
+  dateStr: string;
+  shiftLabel?: string;
+}
+
+function DeleteConfirmModal({ target, onConfirm, onCancel, loading }: {
+  target: DeleteTarget;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
+      <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full"
+          style={{ background: 'oklch(52% 0.22 18 / 0.12)' }}>
+          <span className="text-lg" style={{ color: 'oklch(42% 0.22 18)' }}>⚠</span>
+        </div>
+        <h3 className="mb-1 text-[15px] font-bold text-gray-900">Xác nhận xóa chấm công</h3>
+        <p className="mb-4 text-[13px] text-gray-500">
+          Bạn có chắc muốn xóa bản ghi chấm công ngày{' '}
+          <span className="font-semibold text-gray-800">{target.dateStr}</span>
+          {target.shiftLabel && (
+            <> — ca <span className="font-semibold text-gray-800">{target.shiftLabel}</span></>
+          )}
+          ? Dữ liệu sẽ bị ẩn và không thể khôi phục qua giao diện.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-[13px] font-medium text-gray-700 transition hover:bg-gray-100 disabled:opacity-50"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 rounded-lg px-4 py-2 text-[13px] font-semibold text-white transition disabled:opacity-50"
+            style={{ background: loading ? 'oklch(62% 0.22 18)' : 'oklch(52% 0.22 18)' }}
+          >
+            {loading ? 'Đang xóa…' : 'Xóa bản ghi'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared cell helpers ─────────────────────────────────────────────────────
+
+function CellCheckin({ time }: { time?: string | null }) {
+  return time ? <span className="font-mono text-gray-700">{time}</span> : <span className="text-gray-300">—</span>;
+}
+
+function CellHours({ hours }: { hours?: number }) {
+  return (hours ?? 0) > 0
+    ? <span className="font-mono" style={{ color: 'oklch(44% 0.16 152)' }}>{hours}h</span>
+    : <span className="text-gray-300">—</span>;
+}
+
+function CellMinutes({ minutes, colorKey }: { minutes?: number; colorKey: 'late' | 'early' }) {
+  return (minutes ?? 0) > 0
+    ? <span className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
+        style={{ background: C[colorKey].bg, color: C[colorKey].color }}>{minutes}p</span>
+    : <span className="text-gray-300">—</span>;
+}
+
+function CellCorrection({ status }: { status?: string }) {
+  if (status === 'pending') return (
+    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ background: 'oklch(70% 0.18 50 / 0.15)', color: 'oklch(55% 0.18 50)' }}>● Chờ duyệt</span>
+  );
+  if (status === 'approved') return (
+    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ background: 'oklch(54% 0.16 152 / 0.12)', color: 'oklch(44% 0.16 152)' }}>✓ Đã duyệt</span>
+  );
+  if (status === 'rejected') return (
+    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ background: 'oklch(52% 0.22 18 / 0.12)', color: 'oklch(42% 0.22 18)' }}>✗ Từ chối</span>
+  );
+  return <span className="text-gray-300">—</span>;
+}
+
+function DeleteBtn({ id, dateStr, shiftLabel, onDeleteRequest }: {
+  id?: number; dateStr: string; shiftLabel?: string;
+  onDeleteRequest?: (target: DeleteTarget) => void;
+}) {
+  if (!id) return <span className="text-gray-300">—</span>;
+  return (
+    <button
+      onClick={() => onDeleteRequest?.({ id, dateStr, shiftLabel })}
+      className="rounded px-2 py-1 text-[11px] font-semibold transition hover:opacity-80"
+      style={{ background: 'oklch(52% 0.22 18 / 0.10)', color: 'oklch(42% 0.22 18)' }}
+    >
+      Xóa
+    </button>
+  );
+}
+
 // ─── Daily log table ──────────────────────────────────────────────────────────
 
-function DailyLog({ cells, month, todayDay }: {
+function DailyLog({ cells, month, todayDay, isAdmin, onDeleteRequest }: {
   cells: DayCell[]; month: number; todayDay: number;
+  isAdmin?: boolean;
+  onDeleteRequest?: (target: DeleteTarget) => void;
 }) {
+  // Determine if any cell has multi-shift data (CC mode)
+  const isShiftMode = cells.some(c => c.shifts && c.shifts.length > 0);
+
+  const headers = ['Ngày', 'Thứ'];
+  if (isShiftMode) headers.push('Ca');
+  headers.push('Trạng thái', 'Vào', 'Ra', 'Tổng giờ', 'Trễ', 'Sớm', 'Ghi chú', 'Yêu cầu');
+  if (isAdmin) headers.push('Xóa');
+
+  const tdBase = 'border-b border-gray-50 px-3.5 py-2.5';
+
   return (
     <div className="overflow-auto" style={{ maxHeight: 500 }}>
       <table className="w-full border-separate border-spacing-0 text-[12.5px]">
         <thead>
           <tr>
-            {['Ngày','Thứ','Trạng thái','Vào','Ra','Tổng giờ','Trễ','Sớm','Ghi chú','Yêu cầu'].map((h) => (
+            {headers.map((h) => (
               <th key={h}
                 className="sticky top-0 z-[2] border-b border-gray-100 bg-gray-50 px-3.5 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-gray-400">
                 {h}
@@ -159,43 +275,93 @@ function DailyLog({ cells, month, todayDay }: {
           {cells.map((cell) => {
             const isSun = cell.dow === 0 || cell.dow === 6;
             const isToday = cell.day === todayDay;
+            const dateStr = `${String(cell.day).padStart(2, '0')}/${String(month).padStart(2, '0')}`;
+            const rowBg = isToday ? 'oklch(55% 0.13 200 / 0.07)' : undefined;
+
+            // ── SHIFT / CC mode: expand each shift into its own row ──────────
+            if (isShiftMode && cell.shifts && cell.shifts.length > 0) {
+              const rowSpan = cell.shifts.length;
+              return cell.shifts.map((shift, si) => (
+                <tr key={`${cell.dateStr}-${si}`} className="hover:bg-gray-50" style={rowBg ? { background: rowBg } : undefined}>
+                  {/* Date + Day: only on the first shift row, spanning all rows for that day */}
+                  {si === 0 && (
+                    <>
+                      <td rowSpan={rowSpan}
+                        className={`${tdBase} font-mono font-semibold align-top pt-3 ${isSun ? 'text-red-500' : 'text-gray-800'}`}>
+                        {dateStr}
+                      </td>
+                      <td rowSpan={rowSpan}
+                        className={`${tdBase} align-top pt-3 ${isSun ? 'text-red-400' : 'text-gray-400'}`}>
+                        {DOW_VI[cell.dow]}
+                      </td>
+                    </>
+                  )}
+                  {/* Shift name badge */}
+                  <td className={tdBase}>
+                    <span className="inline-flex items-center rounded px-2 py-0.5 font-mono text-[11px] font-semibold bg-gray-100 text-gray-600">
+                      {shift.shiftName ?? shift.shiftCode}
+                    </span>
+                  </td>
+                  <td className={tdBase}>
+                    <StatusBadge status={shift.status === 'ot' ? 'ok' : shift.status} />
+                    {/* Show secondary pill only when status badge doesn't already convey it */}
+                    {(shift.lateMinutes ?? 0) > 0 && shift.status !== 'late' && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          style={{ background: C.late.bg, color: C.late.color }}>Đi trễ</span>
+                      </div>
+                    )}
+                    {(shift.earlyMinutes ?? 0) > 0 && shift.status !== 'early' && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          style={{ background: C.early.bg, color: C.early.color }}>Về sớm</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className={tdBase}><CellCheckin time={shift.checkinTime} /></td>
+                  <td className={tdBase}><CellCheckin time={shift.checkoutTime} /></td>
+                  <td className={tdBase}><CellHours hours={shift.workingHours} /></td>
+                  <td className={tdBase}><CellMinutes minutes={shift.lateMinutes} colorKey="late" /></td>
+                  <td className={tdBase}><CellMinutes minutes={shift.earlyMinutes} colorKey="early" /></td>
+                  <td className={`${tdBase} max-w-[180px]`}>
+                    <span className="text-gray-300">—</span>
+                  </td>
+                  <td className={tdBase}>
+                    <CellCorrection status={shift.correctionStatus} />
+                  </td>
+                  {isAdmin && (
+                    <td className={tdBase}>
+                      <DeleteBtn
+                        id={shift.attendanceId}
+                        dateStr={dateStr}
+                        shiftLabel={shift.shiftName ?? shift.shiftCode}
+                        onDeleteRequest={onDeleteRequest}
+                      />
+                    </td>
+                  )}
+                </tr>
+              ));
+            }
+
+            // ── FIXED mode: single row per day ───────────────────────────────
             return (
-              <tr key={cell.dateStr}
-                className="hover:bg-gray-50"
-                style={isToday ? { background: 'oklch(55% 0.13 200 / 0.07)' } : undefined}>
-                <td className={`border-b border-gray-50 px-3.5 py-2.5 font-mono font-semibold ${isSun ? 'text-red-500' : 'text-gray-800'}`}>
-                  {String(cell.day).padStart(2, '0')}/{String(month).padStart(2, '0')}
+              <tr key={cell.dateStr} className="hover:bg-gray-50" style={rowBg ? { background: rowBg } : undefined}>
+                <td className={`${tdBase} font-mono font-semibold ${isSun ? 'text-red-500' : 'text-gray-800'}`}>
+                  {dateStr}
                 </td>
-                <td className={`border-b border-gray-50 px-3.5 py-2.5 ${isSun ? 'text-red-400' : 'text-gray-400'}`}>
+                <td className={`${tdBase} ${isSun ? 'text-red-400' : 'text-gray-400'}`}>
                   {DOW_VI[cell.dow]}
                 </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5">
+                <td className={tdBase}>
                   <StatusBadge status={cell.status === 'ot' ? 'ok' : cell.status} />
                   <SecondaryBadges cell={cell} />
                 </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5 font-mono text-gray-700">
-                  {cell.checkinTime ?? <span className="text-gray-300">—</span>}
-                </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5 font-mono text-gray-700">
-                  {cell.checkoutTime ?? <span className="text-gray-300">—</span>}
-                </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5 font-mono"
-                  style={{ color: (cell.workingHours ?? 0) > 0 ? 'oklch(44% 0.16 152)' : '#d1d5db' }}>
-                  {(cell.workingHours ?? 0) > 0 ? `${cell.workingHours}h` : '—'}
-                </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5">
-                  {(cell.lateMinutes ?? 0) > 0
-                    ? <span className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
-                        style={{ background: C.late.bg, color: C.late.color }}>{cell.lateMinutes}p</span>
-                    : <span className="text-gray-300">—</span>}
-                </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5">
-                  {(cell.earlyMinutes ?? 0) > 0
-                    ? <span className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
-                        style={{ background: C.early.bg, color: C.early.color }}>{cell.earlyMinutes}p</span>
-                    : <span className="text-gray-300">—</span>}
-                </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5 max-w-[200px]">
+                <td className={tdBase}><CellCheckin time={cell.checkinTime} /></td>
+                <td className={tdBase}><CellCheckin time={cell.checkoutTime} /></td>
+                <td className={tdBase}><CellHours hours={cell.workingHours} /></td>
+                <td className={tdBase}><CellMinutes minutes={cell.lateMinutes} colorKey="late" /></td>
+                <td className={tdBase}><CellMinutes minutes={cell.earlyMinutes} colorKey="early" /></td>
+                <td className={`${tdBase} max-w-[200px]`}>
                   {(() => {
                     const notes: { label: string; text: string }[] = [];
                     if (cell.note)                 notes.push({ label: '', text: cell.note });
@@ -209,9 +375,7 @@ function DailyLog({ cells, month, todayDay }: {
                       <div className="space-y-0.5">
                         {notes.map(({ label, text }, i) => (
                           <p key={i} className="text-[11.5px] text-gray-600 leading-snug">
-                            {label && (
-                              <span className="font-semibold text-gray-400 mr-1">{label}:</span>
-                            )}
+                            {label && <span className="font-semibold text-gray-400 mr-1">{label}:</span>}
                             {text}
                           </p>
                         ))}
@@ -219,26 +383,13 @@ function DailyLog({ cells, month, todayDay }: {
                     );
                   })()}
                 </td>
-                <td className="border-b border-gray-50 px-3.5 py-2.5">
-                  {cell.correctionStatus === 'pending' && (
-                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                      style={{ background: 'oklch(70% 0.18 50 / 0.15)', color: 'oklch(55% 0.18 50)' }}>
-                      ● Chờ duyệt
-                    </span>
-                  )}
-                  {cell.correctionStatus === 'approved' && (
-                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                      style={{ background: 'oklch(54% 0.16 152 / 0.12)', color: 'oklch(44% 0.16 152)' }}>
-                      ✓ Đã duyệt
-                    </span>
-                  )}
-                  {cell.correctionStatus === 'rejected' && (
-                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
-                      style={{ background: 'oklch(52% 0.22 18 / 0.12)', color: 'oklch(42% 0.22 18)' }}>
-                      ✗ Từ chối
-                    </span>
-                  )}
-                  {!cell.correctionStatus && <span className="text-gray-300">—</span>}
+                {isAdmin && (
+                  <td className={tdBase}>
+                    <DeleteBtn id={cell.attendanceId} dateStr={dateStr} onDeleteRequest={onDeleteRequest} />
+                  </td>
+                )}
+                <td className={tdBase}>
+                  <CellCorrection status={cell.correctionStatus} />
                 </td>
               </tr>
             );
@@ -258,15 +409,37 @@ interface Props {
   todayDay: number;
   onBack: () => void;
   workingMode?: 'FIXED' | 'SHIFT';
+  isAdmin?: boolean;
+  /** For CC employees: total shift slots from EmployeeShiftSchedule for this month */
+  scheduledShifts?: number;
+  onDeleteRecord?: (id: number) => Promise<void>;
 }
 
-export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, workingMode }: Props) {
+export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, workingMode, isAdmin, scheduledShifts: scheduledShiftsProp, onDeleteRecord }: Props) {
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget || !onDeleteRecord) return;
+    setDeleting(true);
+    try {
+      await onDeleteRecord(deleteTarget.id);
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
   const isFixed = workingMode !== 'SHIFT';
   const workingDays = countWorkingDays(year, month);
   const scheduledCells = row.cells.filter(c => !['off', 'holiday', 'future'].includes(c.status));
   const attended = row.cells.filter(c => ['ok','late','early','ot'].includes(c.status)).length;
   const totalShifts = row.cells.reduce((s, c) =>
     s + (c.shifts ? c.shifts.filter(sh => !!sh.checkinTime).length : (c.checkinTime ? 1 : 0)), 0);
+
+  // For CC employees: use shift assignment count from EmployeeShiftSchedule (authoritative).
+  // Fall back to counting shift attendance records if prop not provided.
+  const totalScheduledShifts = scheduledShiftsProp ??
+    row.cells.reduce((s, c) => s + (c.shifts?.length ?? 0), 0);
 
   const earlyDays  = row.cells.filter(c => c.status === 'early').length;
   const totalEarlyMin = row.cells.reduce((s, c) => s + (c.earlyMinutes ?? 0), 0);
@@ -292,6 +465,14 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
 
   return (
     <div className="space-y-4 animate-[fadeUp_.25s_ease_both]">
+      {deleteTarget && (
+        <DeleteConfirmModal
+          target={deleteTarget}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
+          loading={deleting}
+        />
+      )}
       {/* Header */}
       <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white px-5 py-4">
         <button
@@ -362,26 +543,29 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
               color="oklch(52% 0.22 18)" />
           </div>
         ) : (
-          /* SHIFT (CC): 9-card layout — row1: Tổng số ca | Ca đủ giờ | Đúng giờ | Ca thiếu giờ | Đi trễ  row2: Về sớm | Phép năm | Nghỉ ĐB | Vắng mặt */
+          /* SHIFT (CC): 10-card layout — row1: Tổng số ca | Số ca được phân | Ca đủ giờ | Đúng giờ | Ca thiếu giờ  row2: Đi trễ | Về sớm | Phép năm | Nghỉ ĐB | Vắng mặt */
           <div className="grid grid-cols-5 divide-x divide-y divide-gray-100 [&>*]:border-gray-100">
             <StatCard label="Tổng số ca" value={totalShifts}
               sub={`${attended} ngày có mặt`} color="oklch(54% 0.16 152)"
-              pct={scheduledCells.length ? attended / scheduledCells.length * 100 : 0} />
+              pct={totalScheduledShifts ? totalShifts / totalScheduledShifts * 100 : 0} />
+            <StatCard label="Số ca được phân" value={totalScheduledShifts}
+              sub={totalScheduledShifts > 0 ? `${totalShifts} ca đã chấm công` : 'chưa có ca'}
+              color="oklch(46% 0.12 220)" />
             <StatCard label="Ca đủ giờ" value={suffDays}
               sub={`${row.okDays} đúng giờ + ${row.otDays} OT`} color="oklch(44% 0.16 152)"
-              pct={scheduledCells.length ? suffDays / scheduledCells.length * 100 : 0} />
+              pct={totalScheduledShifts ? suffDays / totalScheduledShifts * 100 : 0} />
             <StatCard label="Đúng giờ" value={row.okDays}
               sub="không trễ, đủ giờ" color="oklch(54% 0.16 152)"
-              pct={scheduledCells.length ? row.okDays / scheduledCells.length * 100 : 0} />
+              pct={totalScheduledShifts ? row.okDays / totalScheduledShifts * 100 : 0} />
             <StatCard label="Ca thiếu giờ" value={insuffShifts}
               sub={insuffShifts > 0 ? 'ca chưa đủ giờ quy định' : 'không có'}
               color="oklch(48% 0.15 75)" />
             <StatCard label="Đi trễ" value={row.lateDays}
               sub={`${row.totalLateMin} phút tổng`} color="oklch(58% 0.20 28)"
-              pct={scheduledCells.length ? row.lateDays / scheduledCells.length * 100 : 0} />
+              pct={totalScheduledShifts ? row.lateDays / totalScheduledShifts * 100 : 0} />
             <StatCard label="Về sớm" value={earlyDays}
               sub={`${totalEarlyMin} phút tổng`} color="oklch(54% 0.13 245)"
-              pct={scheduledCells.length ? earlyDays / scheduledCells.length * 100 : 0} />
+              pct={totalScheduledShifts ? earlyDays / totalScheduledShifts * 100 : 0} />
             <StatCard label="Phép năm" value={row.annualDays}
               sub="ngày có lương" color="oklch(60% 0.15 75)" />
             <StatCard label="Nghỉ ĐB" value={specialDays}
@@ -434,7 +618,13 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
           <span className="text-[13.5px] font-semibold text-gray-800">Nhật ký chấm công từng ngày</span>
           <span className="text-[11.5px] text-gray-400">{row.cells.length} ngày trong tháng</span>
         </div>
-        <DailyLog cells={row.cells} month={month} todayDay={todayDay} />
+        <DailyLog
+          cells={row.cells}
+          month={month}
+          todayDay={todayDay}
+          isAdmin={isAdmin}
+          onDeleteRequest={setDeleteTarget}
+        />
       </div>
     </div>
   );

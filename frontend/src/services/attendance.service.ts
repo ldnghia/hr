@@ -168,6 +168,10 @@ export const attendanceService = {
   markForgotCheckout: (attendanceId: number) =>
     api.patch(`/attendance/${attendanceId}/forgot-checkout`),
 
+  /** DELETE /attendance/:id — soft-delete a record (admin only) */
+  deleteAttendance: (id: number) =>
+    api.delete(`/attendance/${id}`).then((r) => r.data),
+
   /** GET /attendance/my-shifts/current-month — assigned shifts this month */
   myShiftsCurrentMonth: () =>
     api.get<{ data: MonthlyShift[] }>('/attendance/my-shifts/current-month').then((r) => r.data.data),

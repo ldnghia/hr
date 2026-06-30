@@ -634,6 +634,15 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
             todayDay={todayDay}
             onBack={() => setDetailEmpId(null)}
             workingMode={workingMode}
+            isAdmin={user?.role === 'admin'}
+            scheduledShifts={workingMode === 'SHIFT'
+              ? shiftSchedules.filter(s => s.employeeId === detailEmpId).length
+              : undefined}
+            onDeleteRecord={async (id) => {
+              await attendanceService.deleteAttendance(id);
+              // Remove deleted record from local state so UI updates immediately
+              setRecords(prev => prev.filter(r => r.id !== id));
+            }}
           />
         ) : (
           <>
