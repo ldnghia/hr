@@ -409,6 +409,7 @@ export class AttendanceQueryService {
           employee: { select: ATTENDANCE_EMPLOYEE_SELECT },
           shift: true,
           corrections: { orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, reason: true, reviewNote: true } },
+          leaveRequest: { select: { type: true, isHalfDay: true } },
         },
         skip,
         take,
@@ -422,12 +423,43 @@ export class AttendanceQueryService {
       0,
     );
 
+    // Fetch approved leave requests for the same scope + date range
+    // Used by the CC grid to show P on days with no attendance records (leave before shift assignment)
+    const leaveWhere: any = { status: 'approved' };
+    if (user.role === 'manager') {
+      leaveWhere.OR = [{ employeeId: user.id }, { employee: { managerId: user.id } }];
+    } else if (user.role === 'employee') {
+      leaveWhere.employeeId = user.id;
+    }
+    if (employeeId) leaveWhere.employeeId = employeeId;
+    if (departmentId) leaveWhere.employee = { departmentId };
+    if (workingMode) leaveWhere.employee = { ...(leaveWhere.employee ?? {}), workingMode };
+    if (dateFrom || dateTo) {
+      // Overlap: leave.fromDate <= dateTo AND leave.toDate >= dateFrom
+      if (dateFrom) leaveWhere.toDate   = { gte: new Date(dateFrom) };
+      if (dateTo)   leaveWhere.fromDate = { ...(leaveWhere.fromDate ?? {}), lte: new Date(dateTo) };
+    }
+    const leaveRequests = await this.prisma.leaveRequest.findMany({
+      where: leaveWhere,
+      select: {
+        id: true,
+        employeeId: true,
+        fromDate: true,
+        toDate: true,
+        type: true,
+        isHalfDay: true,
+        shiftId: true,
+        halfDaySession: true,
+      },
+    });
+
     return {
       ...buildPaginatedResponse(data, total, page, limit),
       summary: {
         totalRecords: total,
         totalWorkingHours: parseFloat(totalWorkingHours.toFixed(2)),
       },
+      leaveRequests,
     };
   }
 

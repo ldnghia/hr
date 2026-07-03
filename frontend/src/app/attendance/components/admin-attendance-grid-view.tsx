@@ -6,6 +6,13 @@ import {
   STATUS_META, initials, avatarGradient,
 } from './admin-attendance-report-types';
 
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+  annual: 'Phép năm',
+  sick: 'Phép ốm',
+  compensatory: 'Phép bù',
+  unpaid: 'Không lương',
+};
+
 // ─── Cell colour tokens (Tailwind arbitrary + inline style) ──────────────────
 
 const CELL_STYLE: Record<CellStatus, { bg: string; color: string }> = {
@@ -104,6 +111,20 @@ function Tooltip({ data }: { data: TooltipData }) {
       {cell.holidayName && (
         <p className="mt-0.5 text-gray-500"><span className="text-gray-400 mr-1">Lễ</span>{cell.holidayName}</p>
       )}
+      {cell.leaveType && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
+            style={{ background: 'oklch(60% 0.15 75 / 0.18)', color: 'oklch(40% 0.15 75)' }}>
+            {LEAVE_TYPE_LABEL[cell.leaveType] ?? cell.leaveType}
+          </span>
+          {cell.isHalfDay && (
+            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{ background: 'oklch(60% 0.15 75 / 0.10)', color: 'oklch(40% 0.15 75)' }}>
+              Nửa ngày (0.5)
+            </span>
+          )}
+        </div>
+      )}
       {cell.correctionStatus === 'pending' && (
         <p className="mt-1 text-[10px] font-semibold" style={{ color: 'oklch(55% 0.18 50)' }}>● Có yêu cầu chỉnh sửa</p>
       )}
@@ -181,11 +202,17 @@ function Cell({ cell, onMouseEnter, onMouseLeave }: {
   } else if (cell.status === 'absent') {
     glyph = <span>✗</span>;
   } else if (cell.status === 'annual') {
-    glyph = <span>P</span>;
+    glyph = cell.isHalfDay
+      ? <span className="relative">P<sup className="text-[7px] leading-none">½</sup></span>
+      : <span>P</span>;
   } else if (cell.status === 'unpaid') {
-    glyph = <span>KL</span>;
+    glyph = cell.isHalfDay
+      ? <span className="relative">KL<sup className="text-[7px] leading-none">½</sup></span>
+      : <span>KL</span>;
   } else if (cell.status === 'special') {
-    glyph = <span>ĐB</span>;
+    glyph = cell.isHalfDay
+      ? <span className="relative">ĐB<sup className="text-[7px] leading-none">½</sup></span>
+      : <span>ĐB</span>;
   } else if (cell.status === 'holiday') {
     glyph = <span>L</span>;
   } else {
@@ -203,6 +230,11 @@ function Cell({ cell, onMouseEnter, onMouseLeave }: {
         style={{ background: bg, color }}
       >
         {glyph}
+        {/* Half-day leave badge: shown when employee worked but also has half-day leave */}
+        {cell.isHalfDay && cell.checkinTime && (
+          <span className="absolute bottom-[1px] left-[2px] text-[7px] font-bold leading-none"
+            style={{ color: 'oklch(48% 0.15 75)' }}>½P</span>
+        )}
         {(cell.correctionStatus || cell.isCorrected) && (
           <span className="absolute top-[2px] right-[2px] h-1.5 w-1.5 rounded-full shadow-[0_0_0_1px_white]"
             style={{ background: 'oklch(58% 0.16 295)' }} />

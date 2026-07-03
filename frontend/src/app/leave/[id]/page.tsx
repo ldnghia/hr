@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { formatDate, formatDateTime, capitalise } from '@/utils/format';
 import { LeaveTimeline } from '@/modules/leave/LeaveTimeline';
 import { RejectModal } from '@/modules/leave/RejectModal';
+import { canActOnLeaveRequest } from '@/modules/leave/leave-permissions';
 import { useTranslation } from 'react-i18next';
 import type { LeaveRequest } from '@/types';
 
@@ -27,11 +28,12 @@ export default function LeaveDetailPage() {
   const [error, setError] = useState('');
   const [showReject, setShowReject] = useState(false);
 
-  const isApprover =
-    user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
-  const canAct = isApprover && leave?.status === 'pending';
+  const canAct = leave ? canActOnLeaveRequest(leave, user) : false;
   const isOwner = leave?.employeeId === user?.id;
-  const canCancel = isOwner && (leave?.status === 'pending' || leave?.status === 'approved');
+  const canCancel =
+    !!leave &&
+    ((leave.status === 'pending' && isOwner) ||
+      (leave.status === 'approved' && user?.role === 'admin'));
 
   function extractApiError(err: unknown, fallback: string): string {
     const e = err as { response?: { data?: { message?: string | string[] } }; message?: string };

@@ -59,6 +59,7 @@ export interface ShiftEntry {
   hasNoCheckout?: boolean;
   attendanceId?: number;
   correctionStatus?: CorrectionStatus;
+  isHalfDay?: boolean;
 }
 
 export interface DayCell {
@@ -86,6 +87,9 @@ export interface DayCell {
   correctionStatus?: CorrectionStatus;
   isCorrected?: boolean;
   isInOffice?: boolean;
+  // Leave info
+  leaveType?: string;
+  isHalfDay?: boolean;
   /** Populated for SHIFT employees (Command Center), length >= 1 */
   shifts?: ShiftEntry[];
 }

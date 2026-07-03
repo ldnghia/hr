@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   type EmployeeRow, type DayCell, type CellStatus,
-  STATUS_META, initials, avatarGradient,
+  STATUS_META,
   isoDateStr, countWorkingDays,
 } from './admin-attendance-report-types';
 
@@ -27,6 +27,14 @@ const C: Record<CellStatus, { bg: string; color: string }> = {
 
 const DOW_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTH_VI = ['Tháng 1','Tháng 2','Tháng 3','Tháng 4','Tháng 5','Tháng 6','Tháng 7','Tháng 8','Tháng 9','Tháng 10','Tháng 11','Tháng 12'];
+
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+  annual:  'Phép năm',
+  sick:    'Phép ốm',
+  compensatory: 'Phép bù',
+  unpaid:  'Không lương',
+  special: 'Phép ĐB',
+};
 
 function StatusBadge({ status }: { status: CellStatus }) {
   const meta = STATUS_META[status];
@@ -304,6 +312,17 @@ function DailyLog({ cells, month, todayDay, isAdmin, onDeleteRequest }: {
                   </td>
                   <td className={tdBase}>
                     <StatusBadge status={shift.status === 'ot' ? 'ok' : shift.status} />
+                    {/* Leave type + full/half day pill for leave shifts */}
+                    {(shift.status === 'annual' || shift.status === 'unpaid' || shift.status === 'special') && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                          style={{ background: 'oklch(60% 0.15 75 / 0.15)', color: 'oklch(40% 0.15 75)' }}>
+                          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'oklch(60% 0.15 75)' }} />
+                          {LEAVE_TYPE_LABEL[shift.status]}
+                          {' · '}{shift.isHalfDay ? 'Nửa ca' : 'Cả ngày'}
+                        </span>
+                      </div>
+                    )}
                     {/* Show secondary pill only when status badge doesn't already convey it */}
                     {(shift.lateMinutes ?? 0) > 0 && shift.status !== 'late' && (
                       <div className="mt-1">
@@ -352,8 +371,22 @@ function DailyLog({ cells, month, todayDay, isAdmin, onDeleteRequest }: {
                 <td className={`${tdBase} ${isSun ? 'text-red-400' : 'text-gray-400'}`}>
                   {DOW_VI[cell.dow]}
                 </td>
+                {/* Keep column count in sync with the header when other days in this table use per-shift rows */}
+                {isShiftMode && (
+                  <td className={tdBase}><span className="text-gray-300">—</span></td>
+                )}
                 <td className={tdBase}>
                   <StatusBadge status={cell.status === 'ot' ? 'ok' : cell.status} />
+                  {cell.leaveType && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+                        style={{ background: 'oklch(60% 0.15 75 / 0.15)', color: 'oklch(40% 0.15 75)' }}>
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'oklch(60% 0.15 75)' }} />
+                        {LEAVE_TYPE_LABEL[cell.leaveType] ?? cell.leaveType}
+                        {' · '}{cell.isHalfDay ? 'Nửa ngày' : 'Cả ngày'}
+                      </span>
+                    </div>
+                  )}
                   <SecondaryBadges cell={cell} />
                 </td>
                 <td className={tdBase}><CellCheckin time={cell.checkinTime} /></td>
@@ -407,7 +440,6 @@ interface Props {
   year: number;
   month: number;
   todayDay: number;
-  onBack: () => void;
   workingMode?: 'FIXED' | 'SHIFT';
   isAdmin?: boolean;
   /** For CC employees: total shift slots from EmployeeShiftSchedule for this month */
@@ -415,7 +447,7 @@ interface Props {
   onDeleteRecord?: (id: number) => Promise<void>;
 }
 
-export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, workingMode, isAdmin, scheduledShifts: scheduledShiftsProp, onDeleteRecord }: Props) {
+export function AdminAttendanceDetailView({ row, year, month, todayDay, workingMode, isAdmin, scheduledShifts: scheduledShiftsProp, onDeleteRecord }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -473,39 +505,6 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, onBack, 
           loading={deleting}
         />
       )}
-      {/* Header */}
-      <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white px-5 py-4">
-        <button
-          onClick={onBack}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-        >
-          ←
-        </button>
-        <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white"
-          style={{ background: avatarGradient(row.id), width: 52, height: 52 }}>
-          {initials(row.fullName)}
-        </div>
-        <div className="flex-1">
-          <h1 className="text-[19px] font-bold tracking-tight text-gray-900">{row.fullName}</h1>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {[
-              ['Mã', row.code],
-              ['Phòng ban', row.deptName],
-              ...(row.shiftName ? [['Ca', row.shiftName]] : []),
-            ].map(([lbl, val]) => (
-              <span key={lbl} className="rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11.5px] text-gray-600">
-                <span className="text-gray-400 mr-1">{lbl}</span>{val}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <button className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[13px] font-medium text-gray-700 transition hover:bg-gray-100">
-            In báo cáo
-          </button>
-        </div>
-      </div>
-
       {/* Stats */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">

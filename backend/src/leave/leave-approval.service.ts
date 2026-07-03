@@ -199,12 +199,11 @@ export class LeaveApprovalService {
 
     // 3. Mark each leave calendar day as attendance (absent-valid)
     if (request.fromDate && request.toDate) {
-      // Resolve employee default shift for the leave attendance record
       const emp = await this.prisma.employee.findUnique({
         where: { id: employeeId },
-        select: { shiftId: true },
+        select: { shiftId: true, workingMode: true },
       });
-      const defaultShiftId = emp?.shiftId ?? 1; // fall back to global default shift
+      const isShiftEmployee = emp?.workingMode === 'SHIFT';
 
       const cursor = new Date(request.fromDate);
       const end = new Date(request.toDate);
@@ -212,20 +211,52 @@ export class LeaveApprovalService {
       while (cursor <= end) {
         const dateOnly = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), cursor.getUTCDate()));
 
-        await this.prisma.attendance.upsert({
-          where: { employeeId_date_shiftId: { employeeId, date: dateOnly, shiftId: defaultShiftId } },
-          create: {
-            employeeId,
-            date: dateOnly,
-            shiftId: defaultShiftId,
-            isOnLeave: true,
-            leaveRequestId,
-          },
-          update: {
-            isOnLeave: true,
-            leaveRequestId,
-          },
-        });
+        if (isShiftEmployee) {
+          // CC (shift rotation): mark each scheduled shift on this date as leave.
+          // For half-day leave with a specific shiftId, only mark that shift.
+          if (request.isHalfDay && request.shiftId) {
+            await this.prisma.attendance.upsert({
+              where: { employeeId_date_shiftId: { employeeId, date: dateOnly, shiftId: request.shiftId } },
+              create: { employeeId, date: dateOnly, shiftId: request.shiftId, isOnLeave: true, leaveRequestId },
+              update: { isOnLeave: true, leaveRequestId },
+            });
+          } else {
+            // Full-day: mark all scheduled shifts on this date as leave.
+            // Primary source: EmployeeShiftSchedule (planned shifts).
+            // Fallback: actual attendance records on that day (employee came in despite leave).
+            const scheduled = await this.prisma.employeeShiftSchedule.findMany({
+              where: { employeeId, date: dateOnly },
+              select: { shiftId: true },
+            });
+            let shiftIds = scheduled.map((s) => s.shiftId);
+            if (shiftIds.length === 0) {
+              // No planned schedule — check for actual attendance records on this date
+              const actual = await this.prisma.attendance.findMany({
+                where: { employeeId, date: dateOnly },
+                select: { shiftId: true },
+              });
+              shiftIds = actual.map((a) => a.shiftId).filter((id): id is number => id !== null);
+            }
+            // If still no shiftIds: day has no schedule and no attendance records.
+            // Leave request itself serves as source of truth — frontend overlays P via leaveRequests API.
+            // Do NOT create a placeholder record with a wrong shiftId.
+            for (const shiftId of shiftIds) {
+              await this.prisma.attendance.upsert({
+                where: { employeeId_date_shiftId: { employeeId, date: dateOnly, shiftId } },
+                create: { employeeId, date: dateOnly, shiftId, isOnLeave: true, leaveRequestId },
+                update: { isOnLeave: true, leaveRequestId },
+              });
+            }
+          }
+        } else {
+          // FIXED employee: use default shift
+          const defaultShiftId = emp?.shiftId ?? 1;
+          await this.prisma.attendance.upsert({
+            where: { employeeId_date_shiftId: { employeeId, date: dateOnly, shiftId: defaultShiftId } },
+            create: { employeeId, date: dateOnly, shiftId: defaultShiftId, isOnLeave: true, leaveRequestId },
+            update: { isOnLeave: true, leaveRequestId },
+          });
+        }
 
         cursor.setUTCDate(cursor.getUTCDate() + 1);
       }

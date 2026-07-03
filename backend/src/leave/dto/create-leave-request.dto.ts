@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsDateString, IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsIn, IsDateString, IsString, IsOptional, IsBoolean, ValidateIf, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export const LEAVE_TYPES = ['annual', 'sick', 'unpaid', 'compensatory'] as const;
@@ -27,6 +27,17 @@ export class CreateLeaveRequestDto {
   @IsBoolean()
   @Type(() => Boolean)
   isHalfDay?: boolean;
+
+  @ApiPropertyOptional({ example: 'first', description: 'Which half: first (nửa ca đầu) or last (nửa ca cuối). Required when isHalfDay=true.' })
+  @ValidateIf((o) => o.isHalfDay === true)
+  @IsIn(['first', 'last'])
+  halfDaySession?: 'first' | 'last';
+
+  @ApiPropertyOptional({ example: 2, description: 'Specific shift ID for CC half-day leave.' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  shiftId?: number;
 
   @ApiProperty({ example: 'Annual family trip' })
   @IsString()

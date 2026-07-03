@@ -5,6 +5,7 @@ export interface AuthUser {
   email: string;
   fullName: string;
   role: 'admin' | 'hr' | 'manager' | 'employee';
+  workingMode?: 'FIXED' | 'SHIFT';
 }
 
 export interface LoginResponse {
@@ -155,6 +156,7 @@ export interface LeaveRequest {
   reason: string;
   days: number;
   isHalfDay?: boolean;
+  halfDaySession?: 'first' | 'last' | null;
   createdAt: string;
   employee?: Pick<Employee, 'id' | 'fullName' | 'email' | 'code' | 'department' | 'manager'>;
   approvals?: LeaveApproval[];
@@ -237,6 +239,7 @@ export interface AttendanceRecord {
   // Leave integration
   isOnLeave?: boolean;
   leaveRequestId?: number | null;
+  leaveRequest?: { type: string; isHalfDay?: boolean } | null;
   // Correction tracking
   isCorrected?: boolean;
   correctionRequestId?: number | null;

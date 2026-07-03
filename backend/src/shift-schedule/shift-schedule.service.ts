@@ -79,6 +79,15 @@ export class ShiftScheduleService {
 
   // ── My schedules ──────────────────────────────────────────────────────────
 
+  async getShiftsForDate(dateStr: string, employeeId: number) {
+    const date = parseUTCDate(dateStr);
+    return this.prisma.employeeShiftSchedule.findMany({
+      where: { employeeId, date },
+      include: { shift: { select: { id: true, name: true, startTime: true, endTime: true } } },
+      orderBy: [{ shiftId: 'asc' }],
+    });
+  }
+
   async getMine(year: number, month: number, employeeId: number) {
     const from = new Date(Date.UTC(year, month - 1, 1));
     const to   = new Date(Date.UTC(year, month, 0));

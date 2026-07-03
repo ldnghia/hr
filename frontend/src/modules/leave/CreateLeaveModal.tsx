@@ -8,19 +8,30 @@ import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { useTranslation } from 'react-i18next';
 import { leaveService } from '@/services/leave.service';
+import api from '@/lib/axios';
 import type { LeaveBalance } from '@/types';
 
 interface CreateLeaveModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  workingMode?: 'FIXED' | 'SHIFT';
 }
 
 type LeaveTypeValue = 'annual' | 'sick' | 'unpaid' | 'compensatory';
 
+interface ShiftOption {
+  id: number;
+  name: string;
+  startTime: string;
+  endTime: string;
+}
+
 interface FormState {
   leaveType: LeaveTypeValue;
   isHalfDay: boolean;
+  halfDaySession: 'first' | 'last';
+  shiftId: number | null;
   fromDate: string;
   toDate: string;
   reason: string;
@@ -29,6 +40,8 @@ interface FormState {
 const INITIAL: FormState = {
   leaveType: 'annual',
   isHalfDay: false,
+  halfDaySession: 'last',
+  shiftId: null,
   fromDate: '',
   toDate: '',
   reason: '',
@@ -51,13 +64,17 @@ function countBusinessDays(from: string, to: string): number {
 /** Types that do NOT deduct from annual leave balance */
 const NO_BALANCE_TYPES: LeaveTypeValue[] = ['unpaid', 'compensatory'];
 
-export function CreateLeaveModal({ open, onClose, onSuccess }: CreateLeaveModalProps) {
+export function CreateLeaveModal({ open, onClose, onSuccess, workingMode }: CreateLeaveModalProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<FormState>(INITIAL);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState<LeaveBalance | null>(null);
+  const [shifts, setShifts] = useState<ShiftOption[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+
+  const isCC = workingMode === 'SHIFT';
 
   const LEAVE_TYPE_OPTIONS = [
     { value: 'annual',       label: t('leave.annual',       'Nghỉ phép năm') },
@@ -71,17 +88,40 @@ export function CreateLeaveModal({ open, onClose, onSuccess }: CreateLeaveModalP
     setForm(INITIAL);
     setErrors({});
     setApiError('');
+    setShifts([]);
     leaveService.balance().then((d) => setBalance(d.balance)).catch(() => {});
   }, [open]);
+
+  // When CC + half-day + date selected → fetch shifts for that date
+  useEffect(() => {
+    if (!isCC || !form.isHalfDay || !form.fromDate) {
+      setShifts([]);
+      setForm((f) => ({ ...f, shiftId: null }));
+      return;
+    }
+    setShiftsLoading(true);
+    api
+      .get<{ data: Array<{ shift: ShiftOption }> }>(`/shift-schedules/me/date?date=${form.fromDate}`)
+      .then((res: { data: { data: Array<{ shift: ShiftOption }> } | Array<{ shift: ShiftOption }> }) => {
+        const raw = res.data;
+        const list = Array.isArray(raw) ? raw : (raw as { data: Array<{ shift: ShiftOption }> }).data ?? [];
+        const shiftList = list.map((s) => s.shift);
+        setShifts(shiftList);
+        // Auto-select first shift
+        if (shiftList.length > 0) {
+          setForm((f) => ({ ...f, shiftId: shiftList[0].id }));
+        }
+      })
+      .catch(() => setShifts([]))
+      .finally(() => setShiftsLoading(false));
+  }, [isCC, form.isHalfDay, form.fromDate]);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => {
       const next = { ...f, [key]: value };
-      // When switching to half-day, sync toDate = fromDate
       if (key === 'isHalfDay' && value === true) {
         next.toDate = next.fromDate;
       }
-      // When fromDate changes in half-day mode, keep toDate in sync
       if (key === 'fromDate' && f.isHalfDay) {
         next.toDate = value as string;
       }
@@ -110,11 +150,13 @@ export function CreateLeaveModal({ open, onClose, onSuccess }: CreateLeaveModalP
     setLoading(true);
     try {
       await leaveService.create({
-        leaveType: form.leaveType,
-        fromDate:  form.fromDate,
-        toDate:    form.isHalfDay ? form.fromDate : form.toDate,
-        isHalfDay: form.isHalfDay,
-        reason:    form.reason,
+        leaveType:      form.leaveType,
+        fromDate:       form.fromDate,
+        toDate:         form.isHalfDay ? form.fromDate : form.toDate,
+        isHalfDay:      form.isHalfDay,
+        halfDaySession: form.isHalfDay ? form.halfDaySession : undefined,
+        shiftId:        form.isHalfDay && isCC && form.shiftId ? form.shiftId : undefined,
+        reason:         form.reason,
       });
       setForm(INITIAL);
       onSuccess();
@@ -216,13 +258,114 @@ export function CreateLeaveModal({ open, onClose, onSuccess }: CreateLeaveModalP
 
         {/* Date fields */}
         {form.isHalfDay ? (
-          <Input
-            label={t('leave.date', 'Ngày nghỉ')}
-            type="date"
-            value={form.fromDate}
-            onChange={(e) => set('fromDate', e.target.value)}
-            error={errors.fromDate}
-          />
+          <>
+            <Input
+              label={t('leave.date', 'Ngày nghỉ')}
+              type="date"
+              value={form.fromDate}
+              onChange={(e) => set('fromDate', e.target.value)}
+              error={errors.fromDate}
+            />
+
+            {/* CC: shift picker + first/last session — FIXED: first/last session toggle */}
+            {isCC ? (
+              <>
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('leave.shift', 'Ca nghỉ')}
+                  </label>
+                  {shiftsLoading ? (
+                    <p className="text-sm text-gray-400">{t('common.loading', 'Đang tải...')}</p>
+                  ) : shifts.length === 0 && form.fromDate ? (
+                    <p className="text-sm text-amber-600">
+                      {t('leave.noShiftsOnDate', 'Không có ca làm việc trong ngày này')}
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {shifts.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => set('shiftId', s.id)}
+                          className={[
+                            'px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors',
+                            form.shiftId === s.id
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400',
+                          ].join(' ')}
+                        >
+                          {s.name} ({s.startTime}–{s.endTime})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {t('leave.halfDaySession', 'Thời điểm nghỉ')}
+                  </label>
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+                    <button
+                      type="button"
+                      onClick={() => set('halfDaySession', 'first')}
+                      className={[
+                        'flex-1 py-2 text-center font-medium transition-colors',
+                        form.halfDaySession === 'first'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-white text-gray-600 hover:bg-gray-50',
+                      ].join(' ')}
+                    >
+                      {t('leave.halfDayFirst', 'Nửa ca đầu')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => set('halfDaySession', 'last')}
+                      className={[
+                        'flex-1 py-2 text-center font-medium transition-colors border-l border-gray-200',
+                        form.halfDaySession === 'last'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-white text-gray-600 hover:bg-gray-50',
+                      ].join(' ')}
+                    >
+                      {t('leave.halfDayLast', 'Nửa ca cuối')}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1">
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('leave.halfDaySession', 'Thời điểm nghỉ')}
+                </label>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+                  <button
+                    type="button"
+                    onClick={() => set('halfDaySession', 'first')}
+                    className={[
+                      'flex-1 py-2 text-center font-medium transition-colors',
+                      form.halfDaySession === 'first'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50',
+                    ].join(' ')}
+                  >
+                    {t('leave.halfDayFirst', 'Nửa ca đầu')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => set('halfDaySession', 'last')}
+                    className={[
+                      'flex-1 py-2 text-center font-medium transition-colors border-l border-gray-200',
+                      form.halfDaySession === 'last'
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50',
+                    ].join(' ')}
+                  >
+                    {t('leave.halfDayLast', 'Nửa ca cuối')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <Input

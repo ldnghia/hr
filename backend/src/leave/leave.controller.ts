@@ -13,7 +13,6 @@ import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
-  ApiQuery,
   ApiParam,
 } from '@nestjs/swagger';
 import { LeaveService } from './leave.service';
@@ -23,7 +22,6 @@ import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { ActionLeaveDto } from './dto/action-leave.dto';
 import { AdjustBalanceDto, AccrueLeaveDto } from './dto/adjust-balance.dto';
 import { ListLeaveRequestDto } from './dto/list-leave-request.dto';
-import { PaginationDto } from '../common/dto/pagination.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -58,13 +56,11 @@ export class LeaveController {
 
   @Get('my')
   @ApiOperation({ summary: 'Get own leave requests' })
-  @ApiQuery({ name: 'status', required: false })
   getMyRequests(
     @CurrentUser('id') employeeId: number,
-    @Query() pagination: PaginationDto,
-    @Query('status') status?: string,
+    @Query() query: ListLeaveRequestDto,
   ) {
-    return this.leaveService.findMy(employeeId, { ...pagination, status });
+    return this.leaveService.findMy(employeeId, query);
   }
 
   // ── GET /leave-request/balance ────────────────────────────────────────────

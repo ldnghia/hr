@@ -11,6 +11,8 @@ export interface CreateLeavePayload {
   fromDate: string;
   toDate: string;
   isHalfDay?: boolean;
+  halfDaySession?: 'first' | 'last';
+  shiftId?: number;
   reason: string;
 }
 

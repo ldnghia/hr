@@ -117,7 +117,15 @@ export const attendanceService = {
 
   report: (params?: ReportParams) =>
     api
-      .get<PaginatedResponse<AttendanceRecord> & { summary: { totalRecords: number; totalWorkingHours: number } }>(
+      .get<PaginatedResponse<AttendanceRecord> & {
+        summary: { totalRecords: number; totalWorkingHours: number };
+        leaveRequests: Array<{
+          id: number; employeeId: number;
+          fromDate: string; toDate: string;
+          type: string; isHalfDay: boolean;
+          shiftId: number | null; halfDaySession: string | null;
+        }>;
+      }>(
         '/attendance/report',
         { params },
       )

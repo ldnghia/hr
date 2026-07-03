@@ -60,9 +60,9 @@ function cellGlyph(shift: ShiftEntry): React.ReactNode {
   if (hasNoCheckout)                                 return <span className="text-[12px] font-bold">?</span>;
   if (isInsufficient)                                return <span>!</span>;
   if (status === 'absent')                           return <span>✗</span>;
-  if (status === 'annual')                           return <span>P</span>;
-  if (status === 'unpaid')                           return <span>KL</span>;
-  if (status === 'special')                          return <span>ĐB</span>;
+  if (status === 'annual')                           return shift.isHalfDay ? <span className="text-[9px]">½P</span> : <span>P</span>;
+  if (status === 'unpaid')                           return shift.isHalfDay ? <span className="text-[9px]">½KL</span> : <span>KL</span>;
+  if (status === 'special')                          return shift.isHalfDay ? <span className="text-[9px]">½ĐB</span> : <span>ĐB</span>;
   if (status === 'holiday')                          return <span>L</span>;
   return <span style={{ opacity: 0.4 }}>·</span>;
 }
@@ -135,7 +135,14 @@ export function CcTooltip({ data }: { data: CcTooltipData }) {
         {empName} <span className="font-normal text-gray-400">· Ngày {String(cell.day).padStart(2, '0')}</span>
       </p>
       <TooltipFlags cell={cell} />
-      {shifts.length === 0 ? (
+      {shifts.length === 0 && LEAVE_STATUSES.includes(cell.status) ? (
+        <div className="rounded-md px-2 py-1.5" style={(() => { const cs = CELL_STYLE[cell.status as CellStatus] ?? CELL_STYLE.annual; return { background: cs.bg, color: cs.color }; })()}>
+          <p className="text-[11px] font-semibold">
+            {cell.isHalfDay ? 'Nghỉ nửa ca' : 'Nghỉ cả ngày'}
+          </p>
+          <p className="text-[10px] opacity-70 mt-0.5">Chưa phân ca — đã duyệt phép</p>
+        </div>
+      ) : shifts.length === 0 ? (
         <p className="text-gray-400">Nghỉ</p>
       ) : (
         shifts.map((s, i) => (
@@ -145,6 +152,12 @@ export function CcTooltip({ data }: { data: CcTooltipData }) {
               <span className="font-mono font-bold text-[11px]">{s.shiftCode}</span>
               {s.shiftName && <span className="text-[10px] opacity-70">{s.shiftName}</span>}
             </div>
+            {/* leave indicator */}
+            {!s.checkinTime && (s.status === 'annual' || s.status === 'unpaid' || s.status === 'special') && (
+              <div className="text-[10px] opacity-80">
+                {s.isHalfDay ? 'Nghỉ nửa ca' : 'Nghỉ cả ngày'}
+              </div>
+            )}
             {/* times */}
             {s.checkinTime && (
               <div className="text-[10px] font-mono opacity-80">
@@ -239,10 +252,28 @@ function dayCellStyle(dow?: number): React.CSSProperties {
     : { borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb' };
 }
 
+const LEAVE_STATUSES: string[] = ['annual', 'unpaid', 'special'];
+
 export function CcCell({ cell, dow, onMouseEnter, onMouseLeave }: CcCellProps) {
   const shifts = cell.shifts ?? [];
-  const isOff = cell.status === 'off' || cell.status === 'future' || shifts.length === 0;
+  const isCellLeave = LEAVE_STATUSES.includes(cell.status) && shifts.length === 0;
+  const isOff = !isCellLeave && (cell.status === 'off' || cell.status === 'future' || shifts.length === 0);
   const isDouble = shifts.length >= 2;
+
+  // No attendance records but approved leave covers this day → full-width P badge
+  if (isCellLeave) {
+    const cs = CELL_STYLE[cell.status as CellStatus] ?? CELL_STYLE.annual;
+    const label = cell.isHalfDay ? '½P' : 'P';
+    return (
+      <td className="day-cell w-12 min-w-[48px] p-0.5" style={dayCellStyle(dow)}
+        onMouseEnter={(e) => onMouseEnter(e, cell)} onMouseLeave={onMouseLeave}>
+        <div className="relative flex h-[34px] w-full items-center justify-center rounded-[5px] font-mono text-[11px] font-bold"
+          style={{ background: cs.bg, color: cs.color }}>
+          {label}
+        </div>
+      </td>
+    );
+  }
 
   if (isOff) {
     return (

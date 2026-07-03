@@ -145,9 +145,12 @@ model LeaveRequest {
   createdAt   DateTime?       @default(now()) @map("created_at")
   reason      String?
   days        Float?
-  isHalfDay   Boolean?        @default(false) @map("is_half_day")
-  approvals   LeaveApproval[]
-  employee    Employee?       @relation(fields: [employeeId], references: [id])
+  isHalfDay        Boolean? @default(false) @map("is_half_day")
+  halfDaySession   String?  @map("half_day_session") // 'first' | 'last' | null
+  shiftId          Int?     @map("shift_id")         // CC half-day: which specific shift
+  approvals    LeaveApproval[]
+  employee     Employee?       @relation(fields: [employeeId], references: [id])
+  attendances  Attendance[]
 
   @@map("leave_request")
 }
@@ -344,6 +347,7 @@ model Attendance {
   deletedAt           DateTime? @map("deleted_at")
   employee            Employee? @relation(fields: [employeeId], references: [id])
   shift               Shift?    @relation(fields: [shiftId], references: [id])
+  leaveRequest        LeaveRequest? @relation(fields: [leaveRequestId], references: [id])
   corrections         AttendanceCorrectionRequest[] @relation("AttendanceToCorrections")
 
   @@unique([employeeId, date, shiftId])

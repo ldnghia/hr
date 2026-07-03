@@ -71,7 +71,21 @@ export class LeaveService {
       throw new BadRequestException('Half-day leave must have fromDate equal to toDate');
     }
 
-    const businessDays = calculateBusinessDays(fromDate, toDate);
+    const emp = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { workingMode: true },
+    });
+    const isShiftEmployee = emp?.workingMode === 'SHIFT';
+
+    // SHIFT employees work weekends — count all calendar days; FIXED: weekdays only
+    let businessDays: number;
+    if (isShiftEmployee) {
+      const msPerDay = 86400000;
+      businessDays = Math.round((toDate.getTime() - fromDate.getTime()) / msPerDay) + 1;
+    } else {
+      businessDays = calculateBusinessDays(fromDate, toDate);
+    }
+
     if (businessDays === 0) {
       throw new BadRequestException(
         'Leave must include at least one business day (Mon–Fri)',
@@ -105,6 +119,8 @@ export class LeaveService {
         reason: dto.reason,
         days,
         isHalfDay: dto.isHalfDay ?? false,
+        halfDaySession: dto.isHalfDay ? (dto.halfDaySession ?? null) : null,
+        shiftId: dto.isHalfDay ? (dto.shiftId ?? null) : null,
         status: 'pending',
         currentStep: 1,
         approvals: {

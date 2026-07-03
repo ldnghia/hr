@@ -21,6 +21,8 @@ interface DaySlot {
   checkinTime: Date | null;
   checkoutTime: Date | null;
   isOnLeave: boolean;
+  isHalfDay: boolean;
+  halfDaySession: string | null; // 'first' | 'last' | null
   totalWorkingHours: number;
   sessionsCount: number;
 }
@@ -142,22 +144,39 @@ export class AttendanceExportCombinedService {
 
     const empIds = employees.map((e) => e.id);
 
+    // Fetch leave request half-day info to determine correct P count in FIXED mode
+    const leaveRequestIds = [...new Set(
+      records.filter((r: any) => r.leaveRequestId).map((r: any) => r.leaveRequestId as number),
+    )];
+    const leaveHalfDayMap = new Map<number, { isHalfDay: boolean; halfDaySession: string | null }>();
+    if (leaveRequestIds.length > 0) {
+      const lrList = await this.prisma.leaveRequest.findMany({
+        where: { id: { in: leaveRequestIds } },
+        select: { id: true, isHalfDay: true, halfDaySession: true },
+      });
+      lrList.forEach((lr) => leaveHalfDayMap.set(lr.id, { isHalfDay: lr.isHalfDay ?? false, halfDaySession: lr.halfDaySession ?? null }));
+    }
+
     // Grid lookup: empId_date → DaySlot
     const lookup = new Map<string, DaySlot>();
     records.forEach((r: any) => {
       const key = `${r.employeeId}_${localDateStr(new Date(r.date))}`;
       const h = r.workingHours ? Number(r.workingHours) : 0;
+      const lrInfo = r.leaveRequestId ? (leaveHalfDayMap.get(r.leaveRequestId) ?? null) : null;
+      const isHalfDay = lrInfo?.isHalfDay ?? false;
+      const halfDaySession = lrInfo?.halfDaySession ?? null;
       const existing = lookup.get(key);
       if (!existing) {
         lookup.set(key, {
           checkinTime:  r.checkinTime  ? new Date(r.checkinTime)  : null,
           checkoutTime: r.checkoutTime ? new Date(r.checkoutTime) : null,
-          isOnLeave: !!r.isOnLeave, totalWorkingHours: h, sessionsCount: 1,
+          isOnLeave: !!r.isOnLeave, isHalfDay, halfDaySession, totalWorkingHours: h, sessionsCount: 1,
         });
       } else {
         if (r.checkinTime)  { const t = new Date(r.checkinTime);  if (!existing.checkinTime  || t < existing.checkinTime)  existing.checkinTime  = t; }
         if (r.checkoutTime) { const t = new Date(r.checkoutTime); if (!existing.checkoutTime || t > existing.checkoutTime) existing.checkoutTime = t; }
         existing.isOnLeave = existing.isOnLeave || !!r.isOnLeave;
+        if (isHalfDay) { existing.isHalfDay = true; existing.halfDaySession = halfDaySession; }
         existing.totalWorkingHours += h;
         existing.sessionsCount += 1;
       }
@@ -393,8 +412,24 @@ export class AttendanceExportCombinedService {
           const isCorrected = fixedCorrectedSet.has(`${emp.id}_${ds}`);
           let sVal = '', cVal = '';
           if (slot) {
-            if (slot.isOnLeave) { sVal = 'P'; cVal = 'P'; }
-            else {
+            if (slot.isOnLeave && slot.isHalfDay) {
+              // Half-day leave: use halfDaySession to determine which half is leave.
+              // 'first' = nửa ca đầu (S='P', C='/' if checkout exists)
+              // 'last'  = nửa ca cuối (S='/' if checkin exists, C='P')
+              // fallback: infer from checkin presence
+              const session = slot.halfDaySession;
+              const isFirst = session === 'first' || (!session && !slot.checkinTime);
+              if (isFirst) {
+                sVal = 'P';
+                if (slot.checkoutTime) cVal = '/';
+              } else {
+                if (slot.checkinTime) sVal = '/';
+                cVal = 'P';
+              }
+            } else if (slot.isOnLeave) {
+              // Full-day leave
+              sVal = 'P'; cVal = 'P';
+            } else {
               if (slot.checkinTime)  sVal = slot.sessionsCount > 1 ? `/${slot.sessionsCount}` : '/';
               if (slot.checkoutTime) cVal = '/';
             }

@@ -13,6 +13,7 @@ import {
   type EmployeeRow, type DayCell, type CellStatus, type MonthlySummary,
   type ShiftEntry, type CorrectionStatus,
   VN_HOLIDAYS, deriveCellStatus, deriveShiftCode, isoDateStr, countWorkingDays,
+  initials, avatarGradient,
 } from './admin-attendance-report-types';
 import { AdminAttendanceKpiStrip } from './admin-attendance-kpi-strip';
 import { AdminAttendanceGridView } from './admin-attendance-grid-view';
@@ -41,12 +42,20 @@ function calcNormalHours(shift?: { startTime?: string; endTime?: string; breakMi
   return Math.max(0, parseFloat(((spanMin - (shift.breakMinutes ?? 0)) / 60).toFixed(2)));
 }
 
+interface ApprovedLeave {
+  id: number; employeeId: number;
+  fromDate: string; toDate: string;
+  type: string; isHalfDay: boolean;
+  shiftId: number | null; halfDaySession: string | null;
+}
+
 function buildEmployeeRows(
   employees: Employee[],
   records: AttendanceRecord[],
   year: number,
   month: number,
   corrMap: Map<number, CorrectionStatus>,
+  approvedLeaves: ApprovedLeave[] = [],
 ): EmployeeRow[] {
   const daysInMonth = new Date(year, month, 0).getDate();
   const todayMs = TODAY.getTime();
@@ -67,6 +76,24 @@ function buildEmployeeRows(
     const dayMap = recMap.get(r.employeeId)!;
     if (!dayMap.has(ds)) dayMap.set(ds, []);
     dayMap.get(ds)!.push(r);
+  }
+
+  // Index approved leaves: employeeId → Set of dateStr strings covered by the leave range
+  // Used to show P on days where no attendance record exists (leave before shift assignment)
+  const leaveMap = new Map<number, Map<string, ApprovedLeave>>();
+  for (const lv of approvedLeaves) {
+    const from = new Date(lv.fromDate);
+    const to   = new Date(lv.toDate);
+    const cursor = new Date(from);
+    while (cursor <= to) {
+      const ds = cursor.toISOString().split('T')[0];
+      if (!leaveMap.has(lv.employeeId)) leaveMap.set(lv.employeeId, new Map());
+      // Keep first leave found per day (multiple leaves on same day is invalid)
+      if (!leaveMap.get(lv.employeeId)!.has(ds)) {
+        leaveMap.get(lv.employeeId)!.set(ds, lv);
+      }
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
   }
 
   // Helper: format ISO time string to HH:MM
@@ -97,8 +124,42 @@ function buildEmployeeRows(
       const isShift = emp.workingMode === 'SHIFT';
 
       if (isFuture) {
-        status = (!isShift && isWeekend) || holidayName ? (holidayName ? 'holiday' : 'off') : 'future';
-        cell = { dateStr: ds, day: d, dow, status, holidayName };
+        const leaveRec = dayRecs.find(r => r.isOnLeave);
+        if (leaveRec) {
+          // Attendance already marked as leave for this future day (FIXED or SHIFT) → count it now,
+          // don't wait for the day to "arrive" — the approval already happened.
+          const lt = leaveRec.leaveRequest?.type ?? 'annual';
+          status = lt === 'unpaid' ? 'unpaid' : lt === 'annual' ? 'annual' : 'special';
+          annualDays += leaveRec.leaveRequest?.isHalfDay ? 0.5 : 1;
+          const leaveShiftEntries: ShiftEntry[] = dayRecs.map(r => ({
+            shiftCode: deriveShiftCode(r.shift),
+            shiftName: r.shift?.name,
+            checkinTime: null,
+            checkoutTime: null,
+            status,
+          }));
+          cell = {
+            dateStr: ds, day: d, dow, status,
+            leaveType: lt,
+            isHalfDay: leaveRec.leaveRequest?.isHalfDay ?? false,
+            attendanceId: leaveRec.id,
+            ...(leaveShiftEntries.length > 0 ? { shifts: leaveShiftEntries } : {}),
+          };
+          cells.push(cell);
+          continue;
+        }
+        // CC employees can have approved leave on future days with no attendance row yet — check leaveMap
+        const empLeaveDay = isShift ? leaveMap.get(emp.id)?.get(ds) : undefined;
+        if (empLeaveDay) {
+          // No attendance record yet but approved leave exists → show leave status
+          const lt = empLeaveDay.type;
+          status = lt === 'unpaid' ? 'unpaid' : lt === 'annual' ? 'annual' : 'special';
+          annualDays += empLeaveDay.isHalfDay ? 0.5 : 1;
+          cell = { dateStr: ds, day: d, dow, status, leaveType: lt, isHalfDay: empLeaveDay.isHalfDay };
+        } else {
+          status = (!isShift && isWeekend) || holidayName ? (holidayName ? 'holiday' : 'off') : 'future';
+          cell = { dateStr: ds, day: d, dow, status, holidayName };
+        }
       } else if (holidayName) {
         status = 'holiday';
         cell = {
@@ -133,6 +194,29 @@ function buildEmployeeRows(
           correctionStatus: rec?.id ? corrMap.get(rec.id) : undefined,
         };
       } else if (rec) {
+        // Leave records take priority: isOnLeave=true overrides attendance status
+        if (rec.isOnLeave) {
+          const lt = rec.leaveRequest?.type ?? 'annual';
+          status = lt === 'unpaid' ? 'unpaid' : lt === 'annual' ? 'annual' : 'special';
+          annualDays += rec.leaveRequest?.isHalfDay ? 0.5 : 1;
+          // Build shift entries so CC grid can render P in the correct S/C/D slot
+          const leaveShiftEntries: ShiftEntry[] = dayRecs.map(r => ({
+            shiftCode: deriveShiftCode(r.shift),
+            shiftName: r.shift?.name,
+            checkinTime: null,
+            checkoutTime: null,
+            status,
+          }));
+          cell = {
+            dateStr: ds, day: d, dow, status,
+            leaveType: lt,
+            isHalfDay: rec.leaveRequest?.isHalfDay ?? false,
+            attendanceId: rec.id,
+            ...(leaveShiftEntries.length > 0 ? { shifts: leaveShiftEntries } : {}),
+          };
+          cells.push(cell);
+          continue;
+        }
         status = deriveCellStatus(rec);
         // Calculate late/early from timestamps
         let lateMinutes = 0;
@@ -169,6 +253,11 @@ function buildEmployeeRows(
           locationNote: rec.locationNote ?? null,
           correctionReason: rec.corrections?.[0]?.reason ?? null,
           correctionReviewNote: rec.corrections?.[0]?.reviewNote ?? null,
+          // Overlay half-day leave info even when employee actually checked in
+          ...(rec.leaveRequest ? {
+            leaveType: rec.leaveRequest.type,
+            isHalfDay: rec.leaveRequest.isHalfDay ?? false,
+          } : {}),
         };
 
         if (status === 'late')   { lateDays++; totalLateMin += lateMinutes; }
@@ -178,20 +267,59 @@ function buildEmployeeRows(
         if (status === 'ok')     okDays++;
         if (status === 'annual') annualDays++;
         if (status === 'absent') absentDays++;
+        // Count half-day leave separately (employee worked + took half-day leave)
+        if (rec.leaveRequest?.isHalfDay) annualDays += 0.5;
       } else if (isShift) {
-        // Shift employee with no record → scheduled rest day
-        status = 'off';
-        cell = { dateStr: ds, day: d, dow, status };
+        // Check for approved leave covering this date even when no attendance record exists
+        // (CC employees request leave before shift assignment — no EmployeeShiftSchedule on that day)
+        const empLeaveDay = leaveMap.get(emp.id)?.get(ds);
+        if (empLeaveDay) {
+          const lt = empLeaveDay.type;
+          status = lt === 'unpaid' ? 'unpaid' : lt === 'annual' ? 'annual' : 'special';
+          annualDays += empLeaveDay.isHalfDay ? 0.5 : 1;
+          cell = {
+            dateStr: ds, day: d, dow, status,
+            leaveType: lt,
+            isHalfDay: empLeaveDay.isHalfDay,
+          };
+        } else {
+          // Shift employee with no record and no leave → scheduled rest day
+          status = 'off';
+          cell = { dateStr: ds, day: d, dow, status };
+        }
       } else {
-        // Fixed employee on a workday with no record → absent
-        status = 'absent';
-        absentDays++;
-        cell = { dateStr: ds, day: d, dow, status };
+        // Fixed employee with no attendance record — check approved leave before defaulting to absent
+        // (e.g. leave approved but the attendance-marking job hasn't run for this day yet)
+        const empLeaveDay = leaveMap.get(emp.id)?.get(ds);
+        if (empLeaveDay) {
+          const lt = empLeaveDay.type;
+          status = lt === 'unpaid' ? 'unpaid' : lt === 'annual' ? 'annual' : 'special';
+          annualDays += empLeaveDay.isHalfDay ? 0.5 : 1;
+          cell = { dateStr: ds, day: d, dow, status, leaveType: lt, isHalfDay: empLeaveDay.isHalfDay };
+        } else {
+          status = 'absent';
+          absentDays++;
+          cell = { dateStr: ds, day: d, dow, status };
+        }
       }
 
       // Build ShiftEntry array from all day records (for CC/SHIFT grid display)
       if (dayRecs.length > 0) {
         const shiftEntries: ShiftEntry[] = dayRecs.map(r => {
+          // Leave records: show P status, no checkin/checkout times
+          if (r.isOnLeave) {
+            const lt = r.leaveRequest?.type ?? 'annual';
+            const leaveStatus: CellStatus = lt === 'unpaid' ? 'unpaid' : lt === 'annual' ? 'annual' : 'special';
+            return {
+              shiftCode: deriveShiftCode(r.shift),
+              shiftName: r.shift?.name,
+              checkinTime: null,
+              checkoutTime: null,
+              status: leaveStatus,
+              isHalfDay: r.leaveRequest?.isHalfDay ?? false,
+              attendanceId: r.id,
+            };
+          }
           const s = deriveCellStatus(r);
           const ci = r.checkinTime ? new Date(r.checkinTime) : null;
           const co = r.checkoutTime ? new Date(r.checkoutTime) : null;
@@ -227,7 +355,22 @@ function buildEmployeeRows(
             correctionStatus: r.id ? corrMap.get(r.id) : undefined,
           };
         });
-        cell = { ...cell, shifts: shiftEntries };
+
+        // Overlay half-day leave info from any leave record in dayRecs (not just rec/dayRecs[0])
+        const anyLeaveRec = dayRecs.find(r => r.isOnLeave && r.leaveRequest);
+        const leaveOverlay = anyLeaveRec ? {
+          leaveType: anyLeaveRec.leaveRequest!.type,
+          isHalfDay: anyLeaveRec.leaveRequest!.isHalfDay ?? false,
+        } : {};
+
+        // If cell was set to 'future' or 'off' by the date branch but actually has a leave record,
+        // promote the cell status to the leave status so the CC grid renders P instead of ·
+        const lt2 = anyLeaveRec?.leaveRequest?.type;
+        const statusOverride: Partial<DayCell> = (lt2 && (cell.status === 'future' || cell.status === 'off'))
+          ? { status: lt2 === 'unpaid' ? 'unpaid' : lt2 === 'annual' ? 'annual' : 'special' }
+          : {};
+
+        cell = { ...cell, ...leaveOverlay, ...statusOverride, shifts: shiftEntries };
       }
 
       cells.push(cell);
@@ -319,6 +462,7 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
 
   const [employees, setEmployees]         = useState<Employee[]>([]);
   const [records, setRecords]             = useState<AttendanceRecord[]>([]);
+  const [approvedLeaves, setApprovedLeaves] = useState<ApprovedLeave[]>([]);
   const [departments, setDepartments]     = useState<Department[]>([]);
   const [corrMap, setCorrMap]             = useState<Map<number, CorrectionStatus>>(new Map());
   // Full per-day schedule array — filtered to match filteredRows when computing summary
@@ -395,7 +539,10 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
         const emps = empRes.value.data ?? [];
         setEmployees(workingMode ? emps.filter(e => e.workingMode === workingMode) : emps);
       }
-      if (recRes.status === 'fulfilled') setRecords(recRes.value.data ?? []);
+      if (recRes.status === 'fulfilled') {
+        setRecords(recRes.value.data ?? []);
+        setApprovedLeaves(recRes.value.leaveRequests ?? []);
+      }
       if (deptRes.status === 'fulfilled') setDepartments(deptRes.value ?? []);
       if (corrRes.status === 'fulfilled') {
         const rawCorr = corrRes.value;
@@ -433,8 +580,8 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
   // ── Build rows ─────────────────────────────────────────────────────────────
 
   const allRows = useMemo(
-    () => buildEmployeeRows(employees, records, year, month, corrMap),
-    [employees, records, year, month, corrMap],
+    () => buildEmployeeRows(employees, records, year, month, corrMap, approvedLeaves),
+    [employees, records, year, month, corrMap, approvedLeaves],
   );
 
   const filteredRows = useMemo(() => {
@@ -501,20 +648,45 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
 
       {/* Top bar */}
       <div className="flex items-center gap-3 border-b border-gray-100 bg-white px-5 py-3">
-        {/* Title */}
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
-            style={{ background: 'linear-gradient(140deg, oklch(55% 0.13 200), oklch(46% 0.13 200))' }}>
-            CC
+        {/* Title — swaps to employee info while viewing a single employee's detail */}
+        {detailEmpId && detailRow ? (
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <button
+              onClick={() => setDetailEmpId(null)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+            >
+              ←
+            </button>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
+              style={{ background: avatarGradient(detailRow.id) }}>
+              {initials(detailRow.fullName)}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-bold leading-tight tracking-tight text-gray-900">{detailRow.fullName}</p>
+              <p className="truncate text-[11px] text-gray-400">Mã {detailRow.code} · {detailRow.deptName}{detailRow.shiftName ? ` · ${detailRow.shiftName}` : ''}</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-[14px] font-bold leading-tight tracking-tight text-gray-900">{title ?? 'Báo cáo chấm công'}</p>
-            <p className="text-[11px] text-gray-400">Bảng tổng hợp theo tháng</p>
+        ) : (
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
+              style={{ background: 'linear-gradient(140deg, oklch(55% 0.13 200), oklch(46% 0.13 200))' }}>
+              CC
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-bold leading-tight tracking-tight text-gray-900">{title ?? 'Báo cáo chấm công'}</p>
+              <p className="text-[11px] text-gray-400">Bảng tổng hợp theo tháng</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Right controls — all in one non-wrapping group */}
         <div className="flex shrink-0 items-center gap-2">
+          {detailEmpId && detailRow && (
+            <button className="h-8 rounded-lg border border-gray-200 bg-gray-50 px-3 text-[12px] font-medium text-gray-600 transition hover:bg-gray-100 whitespace-nowrap">
+              In báo cáo
+            </button>
+          )}
+
           {/* Month pager + Today */}
           <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
             <button onClick={() => changeMonth(-1)}
@@ -632,7 +804,6 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
             year={year}
             month={month}
             todayDay={todayDay}
-            onBack={() => setDetailEmpId(null)}
             workingMode={workingMode}
             isAdmin={user?.role === 'admin'}
             scheduledShifts={workingMode === 'SHIFT'

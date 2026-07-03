@@ -74,6 +74,19 @@ export class AttendanceExportGridService {
       user,
     );
 
+    // Fetch leave request half-day info directly to avoid Prisma relation issues
+    const leaveRequestIds = [...new Set(
+      records.filter((r: any) => r.leaveRequestId).map((r: any) => r.leaveRequestId as number),
+    )];
+    const leaveMap = new Map<number, { isHalfDay: boolean; halfDaySession: string | null }>();
+    if (leaveRequestIds.length > 0) {
+      const leaveRequests = await this.prisma.leaveRequest.findMany({
+        where: { id: { in: leaveRequestIds } },
+        select: { id: true, isHalfDay: true, halfDaySession: true },
+      });
+      leaveRequests.forEach((lr) => leaveMap.set(lr.id, { isHalfDay: lr.isHalfDay ?? false, halfDaySession: lr.halfDaySession ?? null }));
+    }
+
     // Build employee list (preserve order by code)
     const empMap = new Map<number, any>();
     records.forEach((r: any) => {
@@ -95,7 +108,13 @@ export class AttendanceExportGridService {
 
       const slot = classifyShift(r.shift?.startTime);
       if (r.isOnLeave) {
-        day.S.isLeave = day.C.isLeave = day.T.isLeave = true;
+        const lrInfo = r.leaveRequestId ? (leaveMap.get(r.leaveRequestId) ?? null) : null;
+        if (lrInfo?.isHalfDay) {
+          // Half-day leave: only mark this shift's slot as leave
+          day[slot].isLeave = true;
+        } else {
+          day.S.isLeave = day.C.isLeave = day.T.isLeave = true;
+        }
         day.isOnLeave = true;
       } else if (r.checkinTime || r.checkoutTime) {
         day[slot].present = true;
@@ -193,8 +212,6 @@ export class AttendanceExportGridService {
         const daySlot = lookup.get(`${emp.id}_${ds}`);
         const colS = FIX + 1 + di * 3; // 3 sub-cols per day
         const isSun = day.getDay() === 0;
-        const isLeave = daySlot?.isOnLeave ?? false;
-
         (['S', 'C', 'T'] as const).forEach((k, si) => {
           const col = colS + si;
           let val = '';
@@ -205,14 +222,15 @@ export class AttendanceExportGridService {
 
           if (val === '/') colTotals.set(col, (colTotals.get(col) ?? 0) + 1);
 
+          const isSlotLeave = daySlot?.[k].isLeave ?? false;
           const isCorrected = daySlot?.[k].isCorrected ?? false;
           const cell = row.getCell(col);
           applyCell(cell, val, {
-            font: isLeave
+            font: isSlotLeave
               ? { bold: true, size: 9, color: { argb: 'FFCC6600' } }
               : { size: 9 },
             // Priority: corrected > leave > sunday
-            ...(isCorrected ? { fill: correctedFill } : isLeave ? { fill: leaveFill } : isSun ? { fill: sunFill } : {}),
+            ...(isCorrected ? { fill: correctedFill } : isSlotLeave ? { fill: leaveFill } : isSun ? { fill: sunFill } : {}),
           });
         });
       });

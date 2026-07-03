@@ -17,6 +17,17 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class ShiftScheduleController {
   constructor(private readonly service: ShiftScheduleService) {}
 
+  // GET /shift-schedules/me/date?date=YYYY-MM-DD  — shifts assigned on a specific date
+  @Get('me/date')
+  @ApiOperation({ summary: 'Get my shifts for a specific date (for CC half-day leave picker)' })
+  @ApiQuery({ name: 'date', required: true, type: String, description: 'YYYY-MM-DD' })
+  getMineForDate(
+    @Query('date') date: string,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.service.getShiftsForDate(date, userId);
+  }
+
   // GET /shift-schedules/me?year=&month=
   @Get('me')
   @ApiOperation({ summary: 'Get my per-day shift schedules for a month' })

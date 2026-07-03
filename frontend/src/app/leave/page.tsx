@@ -17,12 +17,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { CreateLeaveModal } from '@/modules/leave/CreateLeaveModal';
 import { RejectModal } from '@/modules/leave/RejectModal';
 import { PendingApprovals } from '@/modules/leave/PendingApprovals';
+import { canActOnLeaveRequest } from '@/modules/leave/leave-permissions';
 import { useTranslation } from 'react-i18next';
 import type {
   LeaveRequest,
   PaginatedResponse,
   LeaveBalance,
-  LeaveAccrualLog,
 } from '@/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -34,76 +34,6 @@ function extractError(err: unknown, fallback: string): string {
   return e?.message ?? fallback;
 }
 
-// ─── Balance card ─────────────────────────────────────────────────────────────
-
-function BalanceCard({ balance }: { balance: LeaveBalance }) {
-  const { t } = useTranslation();
-  const total = Number(balance.total);
-  const used = Number(balance.used);
-  const remaining = Number(balance.remaining);
-  const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
-
-  return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-medium text-gray-500">{t('leave.leaveBalance')}</h3>
-          <p className="text-3xl font-bold text-gray-900 mt-0.5">{remaining} <span className="text-base font-normal text-gray-500">{t('leave.daysRemaining')}</span></p>
-        </div>
-        <div className="text-right text-sm text-gray-400">
-          <p>{used} {t('leave.daysUsed')}</p>
-          <p>{total} {t('leave.daysTotal')}</p>
-        </div>
-      </div>
-      {/* Progress bar */}
-      <div className="h-2.5 w-full rounded-full bg-gray-100 overflow-hidden">
-        <div
-          className={['h-full rounded-full transition-all', pct >= 90 ? 'bg-red-400' : pct >= 60 ? 'bg-amber-400' : 'bg-emerald-400'].join(' ')}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <p className="mt-1.5 text-xs text-gray-400">{pct}{t('leave.pctUsed')}</p>
-    </div>
-  );
-}
-
-// ─── Accrual log ──────────────────────────────────────────────────────────────
-
-function AccrualLog({ logs }: { logs: LeaveAccrualLog[] }) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? logs : logs.slice(0, 5);
-
-  if (logs.length === 0) return null;
-
-  return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">{t('leave.accrualHistory')}</h3>
-      <div className="divide-y divide-gray-50">
-        {shown.map((log) => (
-          <div key={log.id} className="flex items-center justify-between py-2.5 text-sm">
-            <div>
-              <span className="text-gray-700">{log.note ?? t('leave.accrual')}</span>
-              <span className="ml-2 text-xs text-gray-400">{formatDate(log.accrualDate)}</span>
-            </div>
-            <span className={['font-semibold tabular-nums', Number(log.days) >= 0 ? 'text-emerald-600' : 'text-red-500'].join(' ')}>
-              {Number(log.days) >= 0 ? '+' : ''}{Number(log.days).toFixed(1)}d
-            </span>
-          </div>
-        ))}
-      </div>
-      {logs.length > 5 && (
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-2 text-xs text-indigo-600 hover:underline"
-        >
-          {expanded ? t('leave.showLess') : t('leave.showAll', { n: logs.length })}
-        </button>
-      )}
-    </div>
-  );
-}
-
 // ─── Admin balance panel ──────────────────────────────────────────────────────
 
 interface AdminBalanceRow extends LeaveBalance {
@@ -113,6 +43,7 @@ interface AdminBalanceRow extends LeaveBalance {
 function AdminBalancePanel() {
   const { t } = useTranslation();
   const [rows, setRows] = useState<AdminBalanceRow[]>([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accruing, setAccruing] = useState(false);
@@ -138,6 +69,16 @@ function AdminBalancePanel() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const filteredRows = rows.filter((row) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      row.employee?.fullName?.toLowerCase().includes(q) ||
+      row.employee?.code?.toLowerCase().includes(q) ||
+      row.employee?.department?.name?.toLowerCase().includes(q)
+    );
+  });
 
   async function runAccrual() {
     setAccruing(true);
@@ -182,6 +123,13 @@ function AdminBalancePanel() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4">
         <h3 className="text-base font-semibold text-gray-800">{t('leave.adminBalances')}</h3>
         <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('employee.searchPlaceholder')}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
           {accrueMsg && <span className="text-sm text-emerald-600">{accrueMsg}</span>}
           <Button size="sm" variant="secondary" loading={accruing} onClick={runAccrual}>
             {t('leave.runAccrual')}
@@ -207,7 +155,7 @@ function AdminBalancePanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {rows.map((row) => {
+              {filteredRows.map((row) => {
                 const total = Number(row.total);
                 const used = Number(row.used);
                 const remaining = Number(row.remaining);
@@ -238,7 +186,7 @@ function AdminBalancePanel() {
                   </tr>
                 );
               })}
-              {rows.length === 0 && (
+              {filteredRows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-400">
                     {t('leave.noBalanceRecords')}
@@ -293,14 +241,12 @@ export default function LeavePage() {
   const { t } = useTranslation();
 
   const [result, setResult] = useState<PaginatedResponse<LeaveRequest> | null>(null);
-  const [balance, setBalance] = useState<LeaveBalance | null>(null);
-  const [accrualLog, setAccrualLog] = useState<LeaveAccrualLog[]>([]);
   const [pending, setPending] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
   const [pageError, setPageError] = useState('');
   const { page, limit, next, prev, reset, goTo } = usePagination(20);
 
@@ -327,15 +273,10 @@ export default function LeavePage() {
     setLoading(true);
     setPageError('');
     try {
-      const [leaveData, balData] = await Promise.all([
-        isAdminOrHR
-          ? leaveService.listAll({ page, limit, status: statusFilter || undefined })
-          : leaveService.listMy({ page, limit, status: statusFilter || undefined }),
-        leaveService.balance(),
-      ]);
+      const leaveData = isAdminOrHR
+        ? await leaveService.listAll({ page, limit, status: statusFilter || undefined })
+        : await leaveService.listMy({ page, limit, status: statusFilter || undefined });
       setResult(leaveData);
-      setBalance(balData.balance);
-      setAccrualLog(balData.accrualLog);
     } catch (err) {
       setPageError(extractError(err, 'Failed to load leave data'));
     } finally {
@@ -383,17 +324,15 @@ export default function LeavePage() {
 
         {pageError && <Alert variant="error" message={pageError} />}
 
-        {/* Balance + accrual (employee's own) */}
-        <div className="grid gap-4 lg:grid-cols-2">
-          {balance ? (
-            <BalanceCard balance={balance} />
-          ) : !loading ? (
-            <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-5 text-center text-sm text-gray-400">
-              {t('leave.noBalance')}
-            </div>
-          ) : null}
-          {accrualLog.length > 0 && <AccrualLog logs={accrualLog} />}
-        </div>
+        {/* Pending approvals */}
+        {isApprover && (
+          <PendingApprovals
+            requests={pending}
+            loading={pendingLoading}
+            onApprove={handleApprove}
+            onReject={(req) => setRejectTarget(req)}
+          />
+        )}
 
         {/* Leave requests table */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -459,7 +398,7 @@ export default function LeavePage() {
                     </p>
                     {/* Row 4: actions */}
                     <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      {leave.status === 'pending' && isApprover && (
+                      {canActOnLeaveRequest(leave, user) && (
                         <>
                           <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => handleApprove(leave.id)}>
                             {t('leave.approve')}
@@ -524,7 +463,7 @@ export default function LeavePage() {
                         <td className="px-6 py-3 text-gray-500 text-xs hidden lg:table-cell">{leave.currentStep}/2</td>
                         <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-2">
-                            {leave.status === 'pending' && isApprover && (
+                            {canActOnLeaveRequest(leave, user) && (
                               <>
                                 <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => handleApprove(leave.id)}>
                                   {t('leave.approve')}
@@ -572,16 +511,6 @@ export default function LeavePage() {
           )}
         </div>
 
-        {/* Pending approvals */}
-        {isApprover && (
-          <PendingApprovals
-            requests={pending}
-            loading={pendingLoading}
-            onApprove={handleApprove}
-            onReject={(req) => setRejectTarget(req)}
-          />
-        )}
-
         {/* Admin: all balances */}
         {isAdminOrHR && <AdminBalancePanel />}
 
@@ -591,6 +520,7 @@ export default function LeavePage() {
         open={showModal}
         onClose={() => setShowModal(false)}
         onSuccess={() => { setShowModal(false); load(); }}
+        workingMode={user?.workingMode}
       />
 
       <RejectModal
