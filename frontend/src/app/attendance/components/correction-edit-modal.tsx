@@ -4,25 +4,15 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Form, DatePicker, Select, Input, Alert } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import { correctionService, type CreateCorrectionPayload } from '@/services/attendance-correction.service';
+import { correctionService, type CorrectionRequest } from '@/services/attendance-correction.service';
 import { attendanceService } from '@/services/attendance.service';
-import type { AttendanceRecord, Shift } from '@/types';
+import type { Shift } from '@/types';
 import { formatDateTime } from '@/utils/format';
 
 const { TextArea } = Input;
 
-/** Compute check-in/check-out for a shift on a given date, handling cross-day (night) shifts. */
-function computeShiftTimes(date: string, shift: { startTime: string; endTime: string }) {
-  const checkinTime = dayjs(`${date}T${shift.startTime}`);
-  const [h] = shift.endTime.split(':').map(Number);
-  const checkoutDate = h < 6 ? dayjs(date).add(1, 'day').format('YYYY-MM-DD') : date;
-  const checkoutTime = dayjs(`${checkoutDate}T${shift.endTime}`);
-  return { checkinTime, checkoutTime };
-}
-
 interface Props {
-  attendance: AttendanceRecord;
-  isOpen: boolean;
+  request: CorrectionRequest;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -36,19 +26,14 @@ interface FormValues {
   reason: string;
 }
 
-export function CorrectionRequestFormModal({ attendance, isOpen, onClose, onSuccess }: Props) {
+export function CorrectionEditModal({ request, onClose, onSuccess }: Props) {
   const { t } = useTranslation();
   const [form] = Form.useForm<FormValues>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const isShift = Boolean(attendance.shift);
-
-  // Default check-in/check-out to the assigned shift's standard hours (not the raw punch time)
-  // so the requested value starts from what the shift dictates.
-  const defaultTimes = isShift && attendance.date && attendance.shift
-    ? computeShiftTimes(attendance.date.slice(0, 10), attendance.shift)
-    : null;
+  const isShift = Boolean(request.originalShift);
+  const date = request.attendance?.date?.slice(0, 10);
 
   // CC employees can pick a different shift for this day — fetch options once
   useEffect(() => {
@@ -64,30 +49,26 @@ export function CorrectionRequestFormModal({ attendance, isOpen, onClose, onSucc
 
   const handleShiftChange = (id: number) => {
     const shift = shifts.find((s) => s.id === id);
-    const date = attendance.date?.slice(0, 10);
     if (!shift || !date) return;
-    const { checkinTime, checkoutTime } = computeShiftTimes(date, shift);
-    form.setFieldValue('checkinTime', checkinTime);
-    form.setFieldValue('checkoutTime', checkoutTime);
+    form.setFieldValue('checkinTime', dayjs(`${date}T${shift.startTime}`));
+    const [h] = shift.endTime.split(':').map(Number);
+    // Cross-day shift: checkout is next day
+    const checkoutDate = h < 6 ? dayjs(date).add(1, 'day').format('YYYY-MM-DD') : date;
+    form.setFieldValue('checkoutTime', dayjs(`${checkoutDate}T${shift.endTime}`));
   };
 
   const handleSubmit = async (values: FormValues) => {
-    const payload: CreateCorrectionPayload = {
-      attendanceId: attendance.id,
-      reason: values.reason.trim(),
-    };
-    const checkinIso = values.checkinTime?.toISOString();
-    const checkoutIso = values.checkoutTime?.toISOString();
-    if (checkinIso && checkinIso !== attendance.checkinTime) payload.requestedCheckinTime = checkinIso;
-    if (checkoutIso && checkoutIso !== attendance.checkoutTime) payload.requestedCheckoutTime = checkoutIso;
-    if (values.checkinNote !== (attendance.checkinNote ?? '')) payload.requestedCheckinNote = values.checkinNote;
-    if (values.checkoutNote !== (attendance.checkoutNote ?? '')) payload.requestedCheckoutNote = values.checkoutNote;
-    if (values.shiftId !== undefined && values.shiftId !== attendance.shiftId) payload.requestedShiftId = values.shiftId;
-
     try {
       setLoading(true);
       setError('');
-      await correctionService.create(payload);
+      await correctionService.update(request.id, {
+        requestedCheckinTime: values.checkinTime?.toISOString(),
+        requestedCheckoutTime: values.checkoutTime?.toISOString(),
+        requestedCheckinNote: values.checkinNote,
+        requestedCheckoutNote: values.checkoutNote,
+        requestedShiftId: values.shiftId,
+        reason: values.reason.trim(),
+      });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -99,12 +80,12 @@ export function CorrectionRequestFormModal({ attendance, isOpen, onClose, onSucc
 
   return (
     <Modal
-      open={isOpen}
-      title={t('attendance.requestCorrectionTitle')}
+      open
+      title={t('attendance.editCorrectionTitle', 'Chỉnh sửa yêu cầu điều chỉnh')}
       onCancel={onClose}
       onOk={() => form.submit()}
       confirmLoading={loading}
-      okText={t('attendance.submitRequest')}
+      okText={t('common.save', 'Lưu')}
       cancelText={t('common.cancel')}
     >
       <Form
@@ -112,16 +93,16 @@ export function CorrectionRequestFormModal({ attendance, isOpen, onClose, onSucc
         layout="vertical"
         onFinish={handleSubmit}
         initialValues={{
-          shiftId: attendance.shiftId ?? undefined,
-          checkinTime: defaultTimes?.checkinTime ?? (attendance.checkinTime ? dayjs(attendance.checkinTime) : null),
-          checkoutTime: defaultTimes?.checkoutTime ?? (attendance.checkoutTime ? dayjs(attendance.checkoutTime) : null),
-          checkinNote: attendance.checkinNote ?? '',
-          checkoutNote: attendance.checkoutNote ?? '',
-          reason: '',
+          shiftId: request.requestedShiftId ?? request.originalShiftId ?? undefined,
+          checkinTime: request.requestedCheckinTime ? dayjs(request.requestedCheckinTime) : null,
+          checkoutTime: request.requestedCheckoutTime ? dayjs(request.requestedCheckoutTime) : null,
+          checkinNote: request.requestedCheckinNote ?? '',
+          checkoutNote: request.requestedCheckoutNote ?? '',
+          reason: request.reason ?? '',
         }}
       >
         <p className="mb-3 text-sm text-gray-500">
-          {t('attendance.correctionDate')}: <span className="font-medium text-gray-800">{attendance.date?.slice(0, 10)}</span>
+          {t('attendance.correctionDate')}: <span className="font-medium text-gray-800">{date ?? '—'}</span>
         </p>
 
         {isShift && (
@@ -140,7 +121,7 @@ export function CorrectionRequestFormModal({ attendance, isOpen, onClose, onSucc
               <span>
                 {t('attendance.checkinTimeLabel')}{' '}
                 <span className="text-gray-400">
-                  ({t('attendance.originalLabel')}: {attendance.checkinTime ? formatDateTime(attendance.checkinTime) : '—'})
+                  ({t('attendance.originalLabel')}: {request.originalCheckinTime ? formatDateTime(request.originalCheckinTime) : '—'})
                 </span>
               </span>
             }
@@ -153,7 +134,7 @@ export function CorrectionRequestFormModal({ attendance, isOpen, onClose, onSucc
               <span>
                 {t('attendance.checkoutTimeLabel')}{' '}
                 <span className="text-gray-400">
-                  ({t('attendance.originalLabel')}: {attendance.checkoutTime ? formatDateTime(attendance.checkoutTime) : '—'})
+                  ({t('attendance.originalLabel')}: {request.originalCheckoutTime ? formatDateTime(request.originalCheckoutTime) : '—'})
                 </span>
               </span>
             }
@@ -163,10 +144,10 @@ export function CorrectionRequestFormModal({ attendance, isOpen, onClose, onSucc
         </div>
 
         <Form.Item name="checkinNote" label={t('attendance.checkinNoteLabel')}>
-          <Input placeholder={t('attendance.checkinNotePlaceholder')} maxLength={500} />
+          <Input maxLength={500} />
         </Form.Item>
         <Form.Item name="checkoutNote" label={t('attendance.checkoutNoteLabel')}>
-          <Input placeholder={t('attendance.checkoutNotePlaceholder')} maxLength={500} />
+          <Input maxLength={500} />
         </Form.Item>
 
         <Form.Item

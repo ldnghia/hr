@@ -2,9 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import { Button, Spin } from 'antd';
 import { statusBadge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
 import { formatDate } from '@/utils/format';
 import type { LeaveRequest } from '@/types';
 
@@ -42,7 +41,7 @@ export function PendingApprovals({
 
       {loading ? (
         <div className="flex items-center justify-center py-8">
-          <Spinner />
+          <Spin />
         </div>
       ) : (
         <div className="divide-y divide-amber-100">
@@ -92,15 +91,16 @@ export function PendingApprovals({
               {/* Actions */}
               <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                 <Button
-                  size="sm"
+                  size="small"
+                  type="primary"
+                  className="bg-emerald-600 hover:!bg-emerald-700"
                   onClick={() => onApprove(req.id)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
                 >
                   {t('leave.approve')}
                 </Button>
                 <Button
-                  size="sm"
-                  variant="danger"
+                  size="small"
+                  danger
                   onClick={() => onReject(req)}
                 >
                   {t('leave.reject')}

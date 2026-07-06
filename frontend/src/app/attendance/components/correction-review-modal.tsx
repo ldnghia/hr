@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
+import { Modal, Input, Alert, Button } from 'antd';
 import { correctionService, type CorrectionRequest } from '@/services/attendance-correction.service';
 import { formatDateTime } from '@/utils/format';
+
+const { TextArea } = Input;
 
 interface Props {
   request: CorrectionRequest;
@@ -62,11 +62,29 @@ export function CorrectionReviewModal({ request, isOpen = true, onClose, onSucce
   };
 
   return (
-    <Modal open={isOpen} title={t('attendance.reviewCorrectionTitle', { id: request.id })} onClose={onClose}>
+    <Modal
+      open={isOpen}
+      title={t('attendance.reviewCorrectionTitle', { id: request.id })}
+      onCancel={onClose}
+      footer={[
+        <Button key="close" onClick={onClose} disabled={!!loading}>
+          {t('common.close')}
+        </Button>,
+        <Button key="reject" danger onClick={handleReject} loading={loading === 'reject'} disabled={loading === 'approve'}>
+          {t('attendance.reject')}
+        </Button>,
+        <Button key="approve" type="primary" onClick={handleApprove} loading={loading === 'approve'} disabled={loading === 'reject'}>
+          {t('attendance.approve')}
+        </Button>,
+      ]}
+    >
       <div className="space-y-4">
         <div className="rounded-lg bg-gray-50 p-3 text-sm">
           <p><span className="font-medium">{t('attendance.employeeLabel')}:</span> {request.employee?.fullName ?? '—'} ({request.employee?.code})</p>
           <p><span className="font-medium">{t('attendance.correctionDate')}:</span> {request.attendance?.date?.slice(0, 10)}</p>
+          {request.originalShift && (
+            <p><span className="font-medium">{t('attendance.shiftLabel', 'Ca làm việc')}:</span> {request.originalShift.name} ({request.originalShift.startTime} — {request.originalShift.endTime})</p>
+          )}
           <p className="mt-1"><span className="font-medium">{t('attendance.reasonLabel')}:</span> {request.reason}</p>
         </div>
 
@@ -81,6 +99,17 @@ export function CorrectionReviewModal({ request, isOpen = true, onClose, onSucce
               </tr>
             </thead>
             <tbody>
+              {(request.requestedShift || request.requestedShiftId) && (
+                <DiffRow
+                  label="Ca làm việc"
+                  original={request.originalShift
+                    ? `${request.originalShift.name} (${request.originalShift.startTime} — ${request.originalShift.endTime})`
+                    : (request.originalShiftId ? `Ca #${request.originalShiftId}` : '—')}
+                  requested={request.requestedShift
+                    ? `${request.requestedShift.name} (${request.requestedShift.startTime} — ${request.requestedShift.endTime})`
+                    : `Ca #${request.requestedShiftId}`}
+                />
+              )}
               <DiffRow
                 label={t('attendance.checkinLabel2')}
                 original={request.originalCheckinTime ? formatDateTime(request.originalCheckinTime) : '—'}
@@ -93,17 +122,6 @@ export function CorrectionReviewModal({ request, isOpen = true, onClose, onSucce
               />
               <DiffRow label={t('attendance.checkinNoteField')} original={request.originalCheckinNote} requested={request.requestedCheckinNote} />
               <DiffRow label={t('attendance.checkoutNoteField')} original={request.originalCheckoutNote} requested={request.requestedCheckoutNote} />
-              {(request.requestedShift || request.requestedShiftId) && (
-                <DiffRow
-                  label="Ca làm việc"
-                  original={request.originalShift
-                    ? `${request.originalShift.name} (${request.originalShift.startTime} — ${request.originalShift.endTime})`
-                    : (request.originalShiftId ? `Ca #${request.originalShiftId}` : '—')}
-                  requested={request.requestedShift
-                    ? `${request.requestedShift.name} (${request.requestedShift.startTime} — ${request.requestedShift.endTime})`
-                    : `Ca #${request.requestedShiftId}`}
-                />
-              )}
             </tbody>
           </table>
         </div>
@@ -112,36 +130,16 @@ export function CorrectionReviewModal({ request, isOpen = true, onClose, onSucce
           <label className="mb-1 block text-xs font-medium text-gray-600">
             {t('attendance.reviewNoteLabel')} <span className="text-gray-400">({t('attendance.requiredForRejection')})</span>
           </label>
-          <textarea
+          <TextArea
             value={reviewNote}
             onChange={(e) => setReviewNote(e.target.value)}
             rows={3}
             maxLength={1000}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
             placeholder={t('attendance.reviewNotePlaceholder')}
           />
         </div>
 
-        {error && <Alert variant="error" message={error} />}
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={!!loading}>{t('common.close')}</Button>
-          <Button
-            type="button"
-            variant="danger"
-            onClick={handleReject}
-            disabled={!!loading}
-          >
-            {loading === 'reject' ? t('attendance.rejecting') : t('attendance.reject')}
-          </Button>
-          <Button
-            type="button"
-            onClick={handleApprove}
-            disabled={!!loading}
-          >
-            {loading === 'approve' ? t('attendance.approving') : t('attendance.approve')}
-          </Button>
-        </div>
+        {error && <Alert type="error" title={error} />}
       </div>
     </Modal>
   );

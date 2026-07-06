@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
+import { Modal, Input } from 'antd';
+
+const { TextArea } = Input;
 
 interface RejectModalProps {
   open: boolean;
@@ -17,8 +18,7 @@ export function RejectModal({ open, onClose, onConfirm, employeeName }: RejectMo
   const [comments, setComments] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     setLoading(true);
     try {
       await onConfirm(comments);
@@ -37,21 +37,15 @@ export function RejectModal({ open, onClose, onConfirm, employeeName }: RejectMo
   return (
     <Modal
       open={open}
-      onClose={handleClose}
+      onCancel={handleClose}
       title={t('leave.rejectTitle')}
-      size="sm"
-      footer={
-        <>
-          <Button variant="secondary" onClick={handleClose} disabled={loading}>
-            {t('common.cancel')}
-          </Button>
-          <Button variant="danger" form="reject-form" type="submit" loading={loading}>
-            {t('leave.confirmReject')}
-          </Button>
-        </>
-      }
+      onOk={handleSubmit}
+      confirmLoading={loading}
+      okText={t('leave.confirmReject')}
+      cancelText={t('common.cancel')}
+      okButtonProps={{ danger: true }}
     >
-      <form id="reject-form" onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
         {employeeName && (
           <p className="text-sm text-gray-600">
             {t('leave.rejectDescription', { name: '' })}
@@ -62,15 +56,14 @@ export function RejectModal({ open, onClose, onConfirm, employeeName }: RejectMo
           <label className="block text-sm font-medium text-gray-700">
             {t('leave.rejectReason')}
           </label>
-          <textarea
+          <TextArea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
             rows={3}
             placeholder={t('leave.rejectReasonPlaceholder')}
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
           />
         </div>
-      </form>
+      </div>
     </Modal>
   );
 }

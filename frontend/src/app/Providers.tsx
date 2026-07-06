@@ -3,6 +3,7 @@
 import { I18nextProvider } from 'react-i18next';
 import { AuthProvider } from '@/context/AuthContext';
 import { I18nInitializer } from '@/components/pwa/I18nInitializer';
+import { AntdThemeProvider } from '@/components/providers/antd-theme-provider';
 import i18n from '@/lib/i18n';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -11,7 +12,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       {/* Applies stored language preference after hydration — must run before any
           translated content is interactive, but after the first render matches SSR. */}
       <I18nInitializer />
-      <AuthProvider>{children}</AuthProvider>
+      <AntdThemeProvider>
+        <AuthProvider>{children}</AuthProvider>
+      </AntdThemeProvider>
     </I18nextProvider>
   );
 }

@@ -1,19 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
-import { Alert } from '@/components/ui/Alert';
+import type { ColumnsType } from 'antd/es/table';
+import { Modal } from 'antd';
+import { Pencil, XCircle, Loader2, Info } from 'lucide-react';
 import { correctionService, type CorrectionRequest } from '@/services/attendance-correction.service';
+import { CorrectionEditModal } from './correction-edit-modal';
+import { CorrectionFilterBar, type CorrectionDateRange } from './correction-filter-bar';
+import { DataTable } from '@/components/antd/data-table';
+import { StatusTag } from '@/components/antd/status-tag';
+import { ReloadButton } from '@/components/antd/reload-button';
 import { formatDateTime } from '@/utils/format';
 
-const STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'info' | 'neutral'> = {
+const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'error' | 'default'> = {
   pending: 'warning',
   approved: 'success',
-  rejected: 'danger',
-  cancelled: 'neutral',
+  rejected: 'error',
+  cancelled: 'default',
 };
 
 const STATUS_LABEL_KEY: Record<string, string> = {
@@ -23,112 +27,203 @@ const STATUS_LABEL_KEY: Record<string, string> = {
   cancelled: 'common.cancelled',
 };
 
-export function CorrectionRequestList() {
+interface Props {
+  actionSlot?: React.ReactNode;
+}
+
+export function CorrectionRequestList({ actionSlot }: Props = {}) {
   const { t } = useTranslation();
   const [items, setItems] = useState<CorrectionRequest[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState<number | null>(null);
+  const [editing, setEditing] = useState<CorrectionRequest | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<string | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<CorrectionDateRange>(null);
 
   const fetchList = useCallback(async () => {
     try {
       setLoading(true);
-      setError('');
-      const res = await correctionService.list({ page, limit: 10 });
+      const res = await correctionService.list({
+        page,
+        limit: pageSize,
+        search: search || undefined,
+        status,
+        from: dateRange?.[0]?.format('YYYY-MM-DD'),
+        to: dateRange?.[1]?.format('YYYY-MM-DD'),
+      });
       const payload = res.data ?? {};
       setItems(payload.items ?? []);
       setTotal(payload.total ?? 0);
     } catch {
-      setError(t('attendance.failedToLoadCorrections'));
+      // table stays empty, no separate error UI per design
     } finally {
       setLoading(false);
     }
-  }, [page, t]);
+  }, [page, pageSize, search, status, dateRange]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
-  const handleCancel = async (id: number) => {
-    if (!confirm(t('attendance.cancelConfirm'))) return;
-    try {
-      setCancelling(id);
-      await correctionService.cancel(id);
-      fetchList();
-    } catch (err: any) {
-      alert(err?.response?.data?.message ?? t('attendance.failedToCancel'));
-    } finally {
-      setCancelling(null);
-    }
+  const handleCancel = (id: number) => {
+    Modal.confirm({
+      title: t('attendance.cancelConfirm'),
+      okText: t('common.confirm', 'Xác nhận'),
+      cancelText: t('common.cancel', 'Hủy'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          setCancelling(id);
+          await correctionService.cancel(id);
+          fetchList();
+        } catch (err: any) {
+          Modal.error({ title: err?.response?.data?.message ?? t('attendance.failedToCancel') });
+        } finally {
+          setCancelling(null);
+        }
+      },
+    });
   };
 
-  if (loading) return <div className="flex justify-center py-8"><Spinner /></div>;
-  if (error) return <Alert variant="error" message={error} />;
-  if (items.length === 0)
-    return <p className="py-8 text-center text-sm text-gray-500">{t('attendance.noCorrectionRequests')}</p>;
+  const columns: ColumnsType<CorrectionRequest> = useMemo(() => [
+    {
+      title: t('common.date'),
+      dataIndex: ['attendance', 'date'],
+      key: 'date',
+      width: 110,
+      sorter: (a, b) => (a.attendance?.date ?? '').localeCompare(b.attendance?.date ?? ''),
+      render: (_, req) => <span className="whitespace-nowrap font-medium">{req.attendance?.date?.slice(0, 10) ?? '—'}</span>,
+    },
+    {
+      title: t('attendance.requestedCheckin'),
+      dataIndex: 'requestedCheckinTime',
+      key: 'checkin',
+      width: 140,
+      render: (val) => <span className="whitespace-nowrap">{val ? formatDateTime(val) : '—'}</span>,
+    },
+    {
+      title: t('attendance.requestedCheckout'),
+      dataIndex: 'requestedCheckoutTime',
+      key: 'checkout',
+      width: 140,
+      render: (val) => <span className="whitespace-nowrap">{val ? formatDateTime(val) : '—'}</span>,
+    },
+    {
+      title: t('common.reason'),
+      dataIndex: 'reason',
+      key: 'reason',
+      width: 200,
+      ellipsis: true,
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      key: 'status',
+      width: 110,
+      render: (statusVal: string) => (
+        <StatusTag
+          variant={STATUS_VARIANT[statusVal] ?? 'default'}
+          label={t(STATUS_LABEL_KEY[statusVal] ?? `common.${statusVal}`, statusVal)}
+        />
+      ),
+    },
+    {
+      title: t('attendance.submitted'),
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 140,
+      sorter: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      render: (val) => <span className="whitespace-nowrap text-gray-500">{formatDateTime(val)}</span>,
+    },
+    {
+      title: '',
+      key: 'action',
+      width: 90,
+      align: 'center',
+      fixed: 'right',
+      render: (_, req) => (
+        <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+          {req.status === 'pending' ? (
+            <>
+              <button
+                type="button"
+                title={t('common.edit', 'Sửa')}
+                onClick={() => setEditing(req)}
+                className="rounded p-1 text-indigo-500 hover:bg-indigo-50 transition-colors"
+              >
+                <Pencil size={15} />
+              </button>
+              <button
+                type="button"
+                title={t('attendance.cancelRequest')}
+                onClick={() => handleCancel(req.id)}
+                disabled={cancelling === req.id}
+                className="rounded p-1 text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+              >
+                {cancelling === req.id ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="rounded p-1 text-gray-300">
+                <Pencil size={15} />
+              </span>
+              <span className="rounded p-1 text-gray-300">
+                <XCircle size={15} />
+              </span>
+            </>
+          )}
+          {req.reviewNote && (
+            <span title={req.reviewNote} className="text-gray-400">
+              <Info size={15} />
+            </span>
+          )}
+        </div>
+      ),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t, cancelling]);
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="px-4 py-3 text-left">{t('common.date')}</th>
-              <th className="px-4 py-3 text-left">{t('attendance.requestedCheckin')}</th>
-              <th className="px-4 py-3 text-left">{t('attendance.requestedCheckout')}</th>
-              <th className="px-4 py-3 text-left">{t('common.reason')}</th>
-              <th className="px-4 py-3 text-left">{t('common.status')}</th>
-              <th className="px-4 py-3 text-left">{t('attendance.submitted')}</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {items.map((req) => (
-              <tr key={req.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium">{req.attendance?.date?.slice(0, 10) ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-600">
-                  {req.requestedCheckinTime ? formatDateTime(req.requestedCheckinTime) : '—'}
-                </td>
-                <td className="px-4 py-3 text-gray-600">
-                  {req.requestedCheckoutTime ? formatDateTime(req.requestedCheckoutTime) : '—'}
-                </td>
-                <td className="max-w-xs truncate px-4 py-3 text-gray-600" title={req.reason}>
-                  {req.reason}
-                </td>
-                <td className="px-4 py-3">
-                  <Badge label={t(STATUS_LABEL_KEY[req.status] ?? `common.${req.status}`, req.status)} variant={STATUS_VARIANT[req.status] ?? 'neutral'} />
-                </td>
-                <td className="px-4 py-3 text-gray-500">{formatDateTime(req.createdAt)}</td>
-                <td className="px-4 py-3">
-                  {req.status === 'pending' && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleCancel(req.id)}
-                      disabled={cancelling === req.id}
-                    >
-                      {cancelling === req.id ? t('attendance.cancelling') : t('attendance.cancelRequest')}
-                    </Button>
-                  )}
-                  {req.reviewNote && (
-                    <span className="ml-1 text-xs text-gray-400" title={req.reviewNote}>
-                      {t('attendance.noteInfo')}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {total > 10 && (
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>{t('common.total_count', { n: total })}</span>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t('attendance.prev')}</Button>
-            <Button variant="secondary" size="sm" disabled={page * 10 >= total} onClick={() => setPage((p) => p + 1)}>{t('attendance.next')}</Button>
+      <CorrectionFilterBar
+        onSearch={(val) => { setPage(1); setSearch(val); }}
+        status={status}
+        onStatusChange={(val) => { setPage(1); setStatus(val); }}
+        dateRange={dateRange}
+        onDateRangeChange={(val) => { setPage(1); setDateRange(val); }}
+        extra={
+          <div className="flex items-center gap-2">
+            <ReloadButton onClick={fetchList} loading={loading} />
+            {actionSlot}
           </div>
-        </div>
+        }
+      />
+
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <DataTable
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          scroll={{ x: 'max-content' }}
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(p, ps) => { setPage(p); setPageSize(ps); }}
+          locale={{ emptyText: t('attendance.noCorrectionRequests') }}
+        />
+      </div>
+
+      {editing && (
+        <CorrectionEditModal
+          request={editing}
+          onClose={() => setEditing(null)}
+          onSuccess={fetchList}
+        />
       )}
     </div>
   );

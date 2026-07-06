@@ -1,20 +1,23 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Spinner } from '@/components/ui/Spinner';
-import { Alert } from '@/components/ui/Alert';
+import type { ColumnsType } from 'antd/es/table';
+import { Eye, Pencil, CheckCircle } from 'lucide-react';
 import { correctionService, type CorrectionRequest } from '@/services/attendance-correction.service';
 import { CorrectionReviewModal } from './correction-review-modal';
+import { CorrectionEditModal } from './correction-edit-modal';
+import { CorrectionFilterBar, type CorrectionDateRange } from './correction-filter-bar';
+import { DataTable } from '@/components/antd/data-table';
+import { StatusTag } from '@/components/antd/status-tag';
+import { ReloadButton } from '@/components/antd/reload-button';
 import { formatDateTime } from '@/utils/format';
 
-const STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'info' | 'neutral'> = {
+const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'error' | 'default'> = {
   pending: 'warning',
   approved: 'success',
-  rejected: 'danger',
-  cancelled: 'neutral',
+  rejected: 'error',
+  cancelled: 'default',
 };
 
 const STATUS_LABEL_KEY: Record<string, string> = {
@@ -24,125 +27,189 @@ const STATUS_LABEL_KEY: Record<string, string> = {
   cancelled: 'common.cancelled',
 };
 
-export function CorrectionAdminPanel() {
+interface Props {
+  actionSlot?: React.ReactNode;
+}
+
+export function CorrectionAdminPanel({ actionSlot }: Props = {}) {
   const { t } = useTranslation();
   const [items, setItems] = useState<CorrectionRequest[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [pageSize, setPageSize] = useState(15);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [reviewing, setReviewing] = useState<CorrectionRequest | null>(null);
+  const [editing, setEditing] = useState<CorrectionRequest | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<string | undefined>('pending');
+  const [dateRange, setDateRange] = useState<CorrectionDateRange>(null);
 
   const fetchList = useCallback(async () => {
     try {
       setLoading(true);
-      setError('');
-      const res = await correctionService.list({ page, limit: 15, status: statusFilter || undefined });
+      const res = await correctionService.list({
+        page,
+        limit: pageSize,
+        search: search || undefined,
+        status,
+        from: dateRange?.[0]?.format('YYYY-MM-DD'),
+        to: dateRange?.[1]?.format('YYYY-MM-DD'),
+      });
       const payload = res.data ?? {};
       setItems(payload.items ?? []);
       setTotal(payload.total ?? 0);
-    } catch {
-      setError(t('attendance.failedToLoadCorrections'));
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, t]);
+  }, [page, pageSize, search, status, dateRange]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
-  const statusLabels: Record<string, string> = {
-    '': t('common.all'),
-    'pending': t('common.pending'),
-    'approved': t('common.approved'),
-    'rejected': t('common.rejected'),
-    'cancelled': t('common.cancelled'),
-  };
+  const columns: ColumnsType<CorrectionRequest> = useMemo(() => [
+    {
+      title: t('common.employee'),
+      key: 'employee',
+      width: 180,
+      render: (_, req) => (
+        <div className="whitespace-nowrap">
+          <p className="font-medium">{req.employee?.fullName ?? '—'}</p>
+          <p className="text-xs text-gray-400">{req.employee?.code}</p>
+        </div>
+      ),
+    },
+    {
+      title: t('common.date'),
+      dataIndex: ['attendance', 'date'],
+      key: 'date',
+      width: 110,
+      sorter: (a, b) => (a.attendance?.date ?? '').localeCompare(b.attendance?.date ?? ''),
+      render: (_, req) => <span className="whitespace-nowrap">{req.attendance?.date?.slice(0, 10) ?? '—'}</span>,
+    },
+    {
+      title: t('attendance.requestedCheckin'),
+      dataIndex: 'requestedCheckinTime',
+      key: 'checkin',
+      width: 140,
+      render: (val) => <span className="whitespace-nowrap">{val ? formatDateTime(val) : '—'}</span>,
+    },
+    {
+      title: t('attendance.requestedCheckout'),
+      dataIndex: 'requestedCheckoutTime',
+      key: 'checkout',
+      width: 140,
+      render: (val) => <span className="whitespace-nowrap">{val ? formatDateTime(val) : '—'}</span>,
+    },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      key: 'status',
+      width: 110,
+      render: (statusVal: string) => (
+        <StatusTag
+          variant={STATUS_VARIANT[statusVal] ?? 'default'}
+          label={t(STATUS_LABEL_KEY[statusVal] ?? `common.${statusVal}`, statusVal)}
+        />
+      ),
+    },
+    {
+      title: t('attendance.submitted'),
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 140,
+      sorter: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      render: (val) => <span className="whitespace-nowrap text-gray-500">{formatDateTime(val)}</span>,
+    },
+    {
+      title: '',
+      key: 'action',
+      width: 90,
+      align: 'center',
+      fixed: 'right',
+      render: (_, req) => (
+        <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+          {req.status === 'pending' ? (
+            <>
+              <button
+                type="button"
+                title={t('attendance.review')}
+                onClick={() => setReviewing(req)}
+                className="rounded p-1 text-green-500 hover:bg-green-50 transition-colors"
+              >
+                <CheckCircle size={15} />
+              </button>
+              <button
+                type="button"
+                title={t('common.edit', 'Sửa')}
+                onClick={() => setEditing(req)}
+                className="rounded p-1 text-indigo-500 hover:bg-indigo-50 transition-colors"
+              >
+                <Pencil size={15} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                title={t('attendance.view')}
+                onClick={() => setReviewing(req)}
+                className="rounded p-1 text-indigo-500 hover:bg-indigo-50 transition-colors"
+              >
+                <Eye size={15} />
+              </button>
+              <span className="rounded p-1 text-gray-300">
+                <Pencil size={15} />
+              </span>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ], [t]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-gray-600">{t('attendance.filterByStatus')}</span>
-        {['', 'pending', 'approved', 'rejected', 'cancelled'].map((s) => (
-          <button
-            key={s}
-            onClick={() => { setStatusFilter(s); setPage(1); }}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              statusFilter === s
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {statusLabels[s]}
-          </button>
-        ))}
-      </div>
-
-      {loading && <div className="flex justify-center py-8"><Spinner /></div>}
-      {error && <Alert variant="error" message={error} />}
-
-      {!loading && !error && items.length === 0 && (
-        <p className="py-8 text-center text-sm text-gray-500">{t('attendance.noCorrectionRequestsFound')}</p>
-      )}
-
-      {!loading && items.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-4 py-3 text-left">{t('common.employee')}</th>
-                <th className="px-4 py-3 text-left">{t('common.date')}</th>
-                <th className="px-4 py-3 text-left">{t('attendance.requestedCheckin')}</th>
-                <th className="px-4 py-3 text-left">{t('attendance.requestedCheckout')}</th>
-                <th className="px-4 py-3 text-left">{t('common.status')}</th>
-                <th className="px-4 py-3 text-left">{t('attendance.submitted')}</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {items.map((req) => (
-                <tr key={req.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{req.employee?.fullName ?? '—'}</p>
-                    <p className="text-xs text-gray-400">{req.employee?.code}</p>
-                  </td>
-                  <td className="px-4 py-3">{req.attendance?.date?.slice(0, 10) ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {req.requestedCheckinTime ? formatDateTime(req.requestedCheckinTime) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {req.requestedCheckoutTime ? formatDateTime(req.requestedCheckoutTime) : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge label={t(STATUS_LABEL_KEY[req.status] ?? `common.${req.status}`, req.status)} variant={STATUS_VARIANT[req.status] ?? 'neutral'} />
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">{formatDateTime(req.createdAt)}</td>
-                  <td className="px-4 py-3">
-                    <Button size="sm" onClick={() => setReviewing(req)}>
-                      {req.status === 'pending' ? t('attendance.review') : t('attendance.view')}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {total > 15 && (
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>{t('common.total_count', { n: total })}</span>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t('attendance.prev')}</Button>
-            <Button variant="secondary" size="sm" disabled={page * 15 >= total} onClick={() => setPage((p) => p + 1)}>{t('attendance.next')}</Button>
+    <div className="space-y-3">
+      <CorrectionFilterBar
+        onSearch={(val) => { setPage(1); setSearch(val); }}
+        status={status}
+        onStatusChange={(val) => { setPage(1); setStatus(val); }}
+        dateRange={dateRange}
+        onDateRangeChange={(val) => { setPage(1); setDateRange(val); }}
+        extra={
+          <div className="flex items-center gap-2">
+            <ReloadButton onClick={fetchList} loading={loading} />
+            {actionSlot}
           </div>
-        </div>
-      )}
+        }
+      />
+
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <DataTable
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          scroll={{ x: 'max-content' }}
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(p, ps) => { setPage(p); setPageSize(ps); }}
+          locale={{ emptyText: t('attendance.noCorrectionRequestsFound') }}
+        />
+      </div>
 
       {reviewing && (
         <CorrectionReviewModal
           request={reviewing}
           onClose={() => setReviewing(null)}
+          onSuccess={fetchList}
+        />
+      )}
+
+      {editing && (
+        <CorrectionEditModal
+          request={editing}
+          onClose={() => setEditing(null)}
           onSuccess={fetchList}
         />
       )}

@@ -44,10 +44,20 @@ export interface CreateCorrectionPayload {
 export interface ListCorrectionParams {
   status?: string;
   employeeId?: number;
+  search?: string;
   from?: string;
   to?: string;
   page?: number;
   limit?: number;
+}
+
+export interface UpdateCorrectionPayload {
+  requestedCheckinTime?: string;
+  requestedCheckoutTime?: string;
+  requestedCheckinNote?: string;
+  requestedCheckoutNote?: string;
+  requestedShiftId?: number;
+  reason?: string;
 }
 
 export interface AdminEditPayload {
@@ -70,6 +80,9 @@ export const correctionService = {
 
   create: (payload: CreateCorrectionPayload) =>
     api.post('/attendance-correction', payload).then((r) => r.data),
+
+  update: (id: number, payload: UpdateCorrectionPayload) =>
+    api.patch(`/attendance-correction/${id}`, payload).then((r) => r.data),
 
   cancel: (id: number) =>
     api.post(`/attendance-correction/${id}/cancel`).then((r) => r.data),

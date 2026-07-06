@@ -8,13 +8,13 @@
  * For SHIFT (CC) employees: a shift selector is shown and required.
  */
 import { useEffect, useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
-import { Spinner } from '@/components/ui/Spinner';
+import { Modal, Form, DatePicker, Select, Input, Alert } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { correctionService } from '@/services/attendance-correction.service';
 import { attendanceService } from '@/services/attendance.service';
 import type { Shift } from '@/types';
+
+const { TextArea } = Input;
 
 interface Props {
   date: string;        // YYYY-MM-DD
@@ -23,17 +23,21 @@ interface Props {
   onSuccess: () => void;
 }
 
+interface FormValues {
+  shiftId?: number;
+  checkinTime: Dayjs | null;
+  checkoutTime: Dayjs | null;
+  reason: string;
+}
+
 export function CorrectionWithoutRecordModal({ date, workingMode, onClose, onSuccess }: Props) {
   const isShift = workingMode === 'SHIFT';
+  const [form] = Form.useForm<FormValues>();
 
-  const [checkinTime, setCheckinTime]   = useState(`${date}T08:00`);
-  const [checkoutTime, setCheckoutTime] = useState(`${date}T17:00`);
-  const [reason, setReason]             = useState('');
-  const [shiftId, setShiftId]           = useState<number | ''>('');
-  const [shifts, setShifts]             = useState<Shift[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftsLoading, setShiftsLoading] = useState(false);
-  const [error, setError]               = useState('');
-  const [loading, setLoading]           = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Fetch available shifts for SHIFT employees
   useEffect(() => {
@@ -44,41 +48,37 @@ export function CorrectionWithoutRecordModal({ date, workingMode, onClose, onSuc
         // `shifts()` may return raw array or wrapped — handle both
         const list = Array.isArray(data) ? data : (data as any)?.data ?? [];
         setShifts(list);
-        // Pre-select first shift
-        if (list.length > 0) setShiftId(list[0].id);
+        if (list.length > 0) applyShift(list[0]);
       })
       .catch(() => {})
       .finally(() => setShiftsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isShift]);
 
-  // Auto-fill default checkin/checkout from selected shift
-  useEffect(() => {
-    if (!isShift || !shiftId) return;
-    const shift = shifts.find((s) => s.id === shiftId);
-    if (!shift) return;
-    setCheckinTime(`${date}T${shift.startTime}`);
-    const [h, m] = shift.endTime.split(':').map(Number);
+  const applyShift = (shift: Shift) => {
+    form.setFieldValue('shiftId', shift.id);
+    form.setFieldValue('checkinTime', dayjs(`${date}T${shift.startTime}`));
+    const [h] = shift.endTime.split(':').map(Number);
     // Cross-day shift: checkout is next day
-    const checkoutDate = h < 6 ? nextDay(date) : date;
-    setCheckoutTime(`${checkoutDate}T${shift.endTime}`);
-  }, [shiftId, shifts, date, isShift]);
+    const checkoutDate = h < 6 ? dayjs(date).add(1, 'day').format('YYYY-MM-DD') : date;
+    form.setFieldValue('checkoutTime', dayjs(`${checkoutDate}T${shift.endTime}`));
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isShift && !shiftId) { setError('Vui lòng chọn ca làm việc.'); return; }
-    if (!reason.trim())      { setError('Vui lòng nhập lý do điều chỉnh.'); return; }
-    if (!checkinTime)        { setError('Vui lòng nhập giờ vào.'); return; }
+  const handleShiftChange = (id: number) => {
+    const shift = shifts.find((s) => s.id === id);
+    if (shift) applyShift(shift);
+  };
 
+  const handleSubmit = async (values: FormValues) => {
     setLoading(true); setError('');
     try {
       await correctionService.create({
         date,
-        // shiftId tells backend which attendance record to find/create for this shift
-        shiftId: isShift && shiftId ? Number(shiftId) : undefined,
-        requestedCheckinTime:  checkinTime  ? new Date(checkinTime).toISOString()  : undefined,
-        requestedCheckoutTime: checkoutTime ? new Date(checkoutTime).toISOString() : undefined,
-        requestedShiftId: isShift && shiftId ? Number(shiftId) : undefined,
-        reason: reason.trim(),
+        shiftId: isShift && values.shiftId ? Number(values.shiftId) : undefined,
+        requestedCheckinTime: values.checkinTime ? values.checkinTime.toISOString() : undefined,
+        requestedCheckoutTime: values.checkoutTime ? values.checkoutTime.toISOString() : undefined,
+        requestedShiftId: isShift && values.shiftId ? Number(values.shiftId) : undefined,
+        reason: values.reason.trim(),
       });
       onSuccess();
       onClose();
@@ -92,101 +92,68 @@ export function CorrectionWithoutRecordModal({ date, workingMode, onClose, onSuc
   return (
     <Modal
       open
-      onClose={onClose}
-      size="sm"
       title="Yêu cầu điều chỉnh — Chưa có bản ghi"
-      footer={
-        <div className="flex gap-3 w-full">
-          <Button variant="secondary" className="flex-1" onClick={onClose} disabled={loading}>Huỷ</Button>
-          <Button className="flex-1" loading={loading} onClick={handleSubmit as any}>Gửi yêu cầu</Button>
-        </div>
-      }
+      onCancel={onClose}
+      onOk={() => form.submit()}
+      confirmLoading={loading}
+      okText="Gửi yêu cầu"
+      cancelText="Huỷ"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+        <p className="text-xs font-semibold text-amber-700 mb-0.5">Ngày chưa có bản ghi</p>
+        <p className="text-sm font-bold text-amber-900">{date}</p>
+        <p className="text-xs text-amber-600 mt-1">
+          Hệ thống sẽ tạo bản ghi chấm công mới dựa trên thông tin bạn cung cấp.
+        </p>
+      </div>
 
-        {/* Date info */}
-        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
-          <p className="text-xs font-semibold text-amber-700 mb-0.5">Ngày chưa có bản ghi</p>
-          <p className="text-sm font-bold text-amber-900">{date}</p>
-          <p className="text-xs text-amber-600 mt-1">
-            Hệ thống sẽ tạo bản ghi chấm công mới dựa trên thông tin bạn cung cấp.
-          </p>
-        </div>
-
-        {/* Shift selector — SHIFT employees only */}
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={handleSubmit}
+        initialValues={{
+          checkinTime: dayjs(`${date}T08:00`),
+          checkoutTime: dayjs(`${date}T17:00`),
+          reason: '',
+        }}
+      >
         {isShift && (
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">
-              Ca làm việc <span className="text-red-500">*</span>
-            </label>
-            {shiftsLoading ? (
-              <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
-                <Spinner className="h-4 w-4" /> Đang tải danh sách ca...
-              </div>
-            ) : (
-              <select
-                value={shiftId}
-                onChange={(e) => setShiftId(e.target.value ? Number(e.target.value) : '')}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">— Chọn ca làm việc —</option>
-                {shifts.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.startTime} — {s.endTime})
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+          <Form.Item
+            name="shiftId"
+            label="Ca làm việc"
+            rules={[{ required: true, message: 'Vui lòng chọn ca làm việc.' }]}
+          >
+            <Select
+              loading={shiftsLoading}
+              placeholder="— Chọn ca làm việc —"
+              onChange={handleShiftChange}
+              options={shifts.map((s) => ({ value: s.id, label: `${s.name} (${s.startTime} — ${s.endTime})` }))}
+            />
+          </Form.Item>
         )}
 
-        {/* Requested check-in */}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
-            Giờ vào <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="datetime-local"
-            value={checkinTime}
-            onChange={(e) => setCheckinTime(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
+        <Form.Item
+          name="checkinTime"
+          label="Giờ vào"
+          rules={[{ required: true, message: 'Vui lòng nhập giờ vào.' }]}
+        >
+          <DatePicker showTime format="DD/MM/YYYY HH:mm" className="w-full" />
+        </Form.Item>
 
-        {/* Requested check-out */}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">Giờ ra</label>
-          <input
-            type="datetime-local"
-            value={checkoutTime}
-            onChange={(e) => setCheckoutTime(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
+        <Form.Item name="checkoutTime" label="Giờ ra">
+          <DatePicker showTime format="DD/MM/YYYY HH:mm" className="w-full" />
+        </Form.Item>
 
-        {/* Reason */}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
-            Lý do <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            rows={3}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Mô tả lý do cần điều chỉnh chấm công..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-          />
-        </div>
+        <Form.Item
+          name="reason"
+          label="Lý do"
+          rules={[{ required: true, message: 'Vui lòng nhập lý do điều chỉnh.' }]}
+        >
+          <TextArea rows={3} placeholder="Mô tả lý do cần điều chỉnh chấm công..." />
+        </Form.Item>
 
-        {error && <Alert variant="error" message={error} />}
-      </form>
+        {error && <Alert type="error" title={error} className="mb-2" />}
+      </Form>
     </Modal>
   );
-}
-
-// Helper: next calendar day
-function nextDay(date: string): string {
-  const d = new Date(date);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
 }

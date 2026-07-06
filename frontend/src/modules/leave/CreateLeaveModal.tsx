@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Alert } from '@/components/ui/Alert';
+import { Modal, Select, Segmented, DatePicker, Input, Alert } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { leaveService } from '@/services/leave.service';
 import api from '@/lib/axios';
 import type { LeaveBalance } from '@/types';
+
+const { TextArea } = Input;
 
 interface CreateLeaveModalProps {
   open: boolean;
@@ -143,8 +142,7 @@ export function CreateLeaveModal({ open, onClose, onSuccess, workingMode }: Crea
     return Object.keys(errs).length === 0;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     if (!validate()) return;
     setApiError('');
     setLoading(true);
@@ -175,97 +173,81 @@ export function CreateLeaveModal({ open, onClose, onSuccess, workingMode }: Crea
   const remaining = balance ? Number(balance.remaining) : null;
   const willExceed = needsBalance && remaining !== null && requestedDays > 0 && requestedDays > remaining;
 
+  const toDayjs = (val: string) => (val ? dayjs(val) : null);
+  const fromDatePicker = (setter: (v: string) => void) => (val: Dayjs | null) => setter(val ? val.format('YYYY-MM-DD') : '');
+
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onCancel={onClose}
       title={t('leave.newRequest', 'Tạo yêu cầu nghỉ phép')}
-      size="md"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            {t('common.cancel', 'Hủy')}
-          </Button>
-          <Button form="create-leave-form" type="submit" loading={loading} disabled={willExceed}>
-            {t('leave.submitRequest', 'Gửi yêu cầu')}
-          </Button>
-        </>
-      }
+      onOk={handleSubmit}
+      confirmLoading={loading}
+      okText={t('leave.submitRequest', 'Gửi yêu cầu')}
+      cancelText={t('common.cancel', 'Hủy')}
+      okButtonProps={{ disabled: willExceed }}
     >
-      <form id="create-leave-form" onSubmit={handleSubmit} className="space-y-4">
-        {apiError && <Alert message={apiError} />}
+      <div className="space-y-4">
+        {apiError && <Alert type="error" title={apiError} />}
 
         {/* Balance hint */}
         {balance && needsBalance && (
-          <div className={[
-            'rounded-lg px-4 py-3 text-sm',
-            willExceed
-              ? 'bg-red-50 border border-red-200 text-red-700'
-              : 'bg-indigo-50 border border-indigo-100 text-indigo-700',
-          ].join(' ')}>
-            <span className="font-medium">{t('leave.balanceHint', 'Số ngày còn lại:')}</span>{' '}
-            <span className="font-bold">{Number(balance.remaining)}</span>{' '}
-            {`/ ${Number(balance.total)} ${t('leave.days', 'ngày')}`}
-            {requestedDays > 0 && (
-              <>
-                {' '}— {t('leave.requesting', { n: requestedDays })}
-                {willExceed && ` ${t('leave.exceedsBalance', '(vượt quá số ngày phép)')}`}
-              </>
-            )}
-          </div>
+          <Alert
+            type={willExceed ? 'error' : 'info'}
+            title={
+              <span>
+                <span className="font-medium">{t('leave.balanceHint', 'Số ngày còn lại:')}</span>{' '}
+                <span className="font-bold">{Number(balance.remaining)}</span>{' '}
+                {`/ ${Number(balance.total)} ${t('leave.days', 'ngày')}`}
+                {requestedDays > 0 && (
+                  <>
+                    {' '}— {t('leave.requesting', { n: requestedDays })}
+                    {willExceed && ` ${t('leave.exceedsBalance', '(vượt quá số ngày phép)')}`}
+                  </>
+                )}
+              </span>
+            }
+          />
         )}
 
         {/* Leave type */}
-        <Select
-          label={t('leave.leaveType', 'Loại nghỉ')}
-          value={form.leaveType}
-          options={LEAVE_TYPE_OPTIONS}
-          onChange={(e) => set('leaveType', e.target.value as LeaveTypeValue)}
-        />
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">{t('leave.leaveType', 'Loại nghỉ')}</label>
+          <Select
+            value={form.leaveType}
+            options={LEAVE_TYPE_OPTIONS}
+            className="w-full"
+            onChange={(val) => set('leaveType', val as LeaveTypeValue)}
+          />
+        </div>
 
         {/* Full day / Half day toggle */}
         <div>
-          <p className="block text-sm font-medium text-gray-700 mb-2">
-            {t('leave.dayType', 'Thời gian nghỉ')}
-          </p>
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-            <button
-              type="button"
-              onClick={() => set('isHalfDay', false)}
-              className={[
-                'flex-1 py-2 text-center font-medium transition-colors',
-                !form.isHalfDay
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50',
-              ].join(' ')}
-            >
-              {t('leave.fullDay', 'Cả ngày')}
-            </button>
-            <button
-              type="button"
-              onClick={() => set('isHalfDay', true)}
-              className={[
-                'flex-1 py-2 text-center font-medium transition-colors border-l border-gray-200',
-                form.isHalfDay
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50',
-              ].join(' ')}
-            >
-              {t('leave.halfDay', 'Nửa ngày')} <span className="text-xs opacity-75">(0.5)</span>
-            </button>
-          </div>
+          <p className="mb-2 text-sm font-medium text-gray-700">{t('leave.dayType', 'Thời gian nghỉ')}</p>
+          <Segmented
+            block
+            value={form.isHalfDay ? 'half' : 'full'}
+            onChange={(val) => set('isHalfDay', val === 'half')}
+            options={[
+              { value: 'full', label: t('leave.fullDay', 'Cả ngày') },
+              { value: 'half', label: `${t('leave.halfDay', 'Nửa ngày')} (0.5)` },
+            ]}
+          />
         </div>
 
         {/* Date fields */}
         {form.isHalfDay ? (
           <>
-            <Input
-              label={t('leave.date', 'Ngày nghỉ')}
-              type="date"
-              value={form.fromDate}
-              onChange={(e) => set('fromDate', e.target.value)}
-              error={errors.fromDate}
-            />
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('leave.date', 'Ngày nghỉ')}</label>
+              <DatePicker
+                className="w-full"
+                format="DD/MM/YYYY"
+                value={toDayjs(form.fromDate)}
+                onChange={fromDatePicker((v) => set('fromDate', v))}
+              />
+              {errors.fromDate && <p className="mt-1 text-xs text-red-500">{errors.fromDate}</p>}
+            </div>
 
             {/* CC: shift picker + first/last session — FIXED: first/last session toggle */}
             {isCC ? (
@@ -281,55 +263,26 @@ export function CreateLeaveModal({ open, onClose, onSuccess, workingMode }: Crea
                       {t('leave.noShiftsOnDate', 'Không có ca làm việc trong ngày này')}
                     </p>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {shifts.map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => set('shiftId', s.id)}
-                          className={[
-                            'px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors',
-                            form.shiftId === s.id
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400',
-                          ].join(' ')}
-                        >
-                          {s.name} ({s.startTime}–{s.endTime})
-                        </button>
-                      ))}
-                    </div>
+                    <Segmented
+                      value={form.shiftId ?? undefined}
+                      onChange={(val) => set('shiftId', val as number)}
+                      options={shifts.map((s) => ({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` }))}
+                    />
                   )}
                 </div>
                 <div className="space-y-1">
                   <label className="block text-sm font-medium text-gray-700">
                     {t('leave.halfDaySession', 'Thời điểm nghỉ')}
                   </label>
-                  <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-                    <button
-                      type="button"
-                      onClick={() => set('halfDaySession', 'first')}
-                      className={[
-                        'flex-1 py-2 text-center font-medium transition-colors',
-                        form.halfDaySession === 'first'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-white text-gray-600 hover:bg-gray-50',
-                      ].join(' ')}
-                    >
-                      {t('leave.halfDayFirst', 'Nửa ca đầu')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => set('halfDaySession', 'last')}
-                      className={[
-                        'flex-1 py-2 text-center font-medium transition-colors border-l border-gray-200',
-                        form.halfDaySession === 'last'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-white text-gray-600 hover:bg-gray-50',
-                      ].join(' ')}
-                    >
-                      {t('leave.halfDayLast', 'Nửa ca cuối')}
-                    </button>
-                  </div>
+                  <Segmented
+                    block
+                    value={form.halfDaySession}
+                    onChange={(val) => set('halfDaySession', val as 'first' | 'last')}
+                    options={[
+                      { value: 'first', label: t('leave.halfDayFirst', 'Nửa ca đầu') },
+                      { value: 'last', label: t('leave.halfDayLast', 'Nửa ca cuối') },
+                    ]}
+                  />
                 </div>
               </>
             ) : (
@@ -337,52 +290,41 @@ export function CreateLeaveModal({ open, onClose, onSuccess, workingMode }: Crea
                 <label className="block text-sm font-medium text-gray-700">
                   {t('leave.halfDaySession', 'Thời điểm nghỉ')}
                 </label>
-                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-                  <button
-                    type="button"
-                    onClick={() => set('halfDaySession', 'first')}
-                    className={[
-                      'flex-1 py-2 text-center font-medium transition-colors',
-                      form.halfDaySession === 'first'
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-white text-gray-600 hover:bg-gray-50',
-                    ].join(' ')}
-                  >
-                    {t('leave.halfDayFirst', 'Nửa ca đầu')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => set('halfDaySession', 'last')}
-                    className={[
-                      'flex-1 py-2 text-center font-medium transition-colors border-l border-gray-200',
-                      form.halfDaySession === 'last'
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-white text-gray-600 hover:bg-gray-50',
-                    ].join(' ')}
-                  >
-                    {t('leave.halfDayLast', 'Nửa ca cuối')}
-                  </button>
-                </div>
+                <Segmented
+                  block
+                  value={form.halfDaySession}
+                  onChange={(val) => set('halfDaySession', val as 'first' | 'last')}
+                  options={[
+                    { value: 'first', label: t('leave.halfDayFirst', 'Nửa ca đầu') },
+                    { value: 'last', label: t('leave.halfDayLast', 'Nửa ca cuối') },
+                  ]}
+                />
               </div>
             )}
           </>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            <Input
-              label={t('leave.fromDate', 'Từ ngày')}
-              type="date"
-              value={form.fromDate}
-              onChange={(e) => set('fromDate', e.target.value)}
-              error={errors.fromDate}
-            />
-            <Input
-              label={t('leave.toDate', 'Đến ngày')}
-              type="date"
-              value={form.toDate}
-              min={form.fromDate}
-              onChange={(e) => set('toDate', e.target.value)}
-              error={errors.toDate}
-            />
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('leave.fromDate', 'Từ ngày')}</label>
+              <DatePicker
+                className="w-full"
+                format="DD/MM/YYYY"
+                value={toDayjs(form.fromDate)}
+                onChange={fromDatePicker((v) => set('fromDate', v))}
+              />
+              {errors.fromDate && <p className="mt-1 text-xs text-red-500">{errors.fromDate}</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('leave.toDate', 'Đến ngày')}</label>
+              <DatePicker
+                className="w-full"
+                format="DD/MM/YYYY"
+                value={toDayjs(form.toDate)}
+                minDate={form.fromDate ? dayjs(form.fromDate) : undefined}
+                onChange={fromDatePicker((v) => set('toDate', v))}
+              />
+              {errors.toDate && <p className="mt-1 text-xs text-red-500">{errors.toDate}</p>}
+            </div>
           </div>
         )}
 
@@ -398,16 +340,15 @@ export function CreateLeaveModal({ open, onClose, onSuccess, workingMode }: Crea
           <label className="block text-sm font-medium text-gray-700">
             {t('leave.reason', 'Lý do')} <span className="text-red-500">*</span>
           </label>
-          <textarea
+          <TextArea
             value={form.reason}
             onChange={(e) => set('reason', e.target.value)}
             rows={3}
             placeholder={t('leave.reasonPlaceholder', 'Nhập lý do nghỉ phép...')}
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none"
           />
           {errors.reason && <p className="text-xs text-red-500">{errors.reason}</p>}
         </div>
-      </form>
+      </div>
     </Modal>
   );
 }

@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import type { ColumnsType } from 'antd/es/table';
+import { Button, Select, Input, Modal, Alert } from 'antd';
+import { Plus, CheckCircle, XCircle, Ban } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Pagination } from '@/components/ui/Pagination';
-import { Modal } from '@/components/ui/Modal';
-import { Alert } from '@/components/ui/Alert';
-import { PageSpinner } from '@/components/ui/Spinner';
-import { statusBadge } from '@/components/ui/Badge';
+import { DataTable } from '@/components/antd/data-table';
+import { StatusTag } from '@/components/antd/status-tag';
+import { ReloadButton } from '@/components/antd/reload-button';
 import { leaveService } from '@/services/leave.service';
 import { usePagination } from '@/hooks/usePagination';
 import { formatDate, formatMonthYear } from '@/utils/format';
@@ -25,6 +24,8 @@ import type {
   LeaveBalance,
 } from '@/types';
 
+const { TextArea } = Input;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function extractError(err: unknown, fallback: string): string {
@@ -33,6 +34,20 @@ function extractError(err: unknown, fallback: string): string {
   if (raw) return Array.isArray(raw) ? raw[0] : raw;
   return e?.message ?? fallback;
 }
+
+const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'error' | 'default'> = {
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'error',
+  cancelled: 'default',
+};
+
+const TYPE_VARIANT: Record<string, 'warning' | 'success' | 'error' | 'default'> = {
+  annual: 'default',
+  sick: 'warning',
+  compensatory: 'success',
+  unpaid: 'default',
+};
 
 // ─── Admin balance panel ──────────────────────────────────────────────────────
 
@@ -118,115 +133,124 @@ function AdminBalancePanel() {
     }
   }
 
+  const columns: ColumnsType<AdminBalanceRow> = useMemo(() => [
+    {
+      title: t('leave.colEmployee'),
+      key: 'employee',
+      width: 200,
+      render: (_, row) => (
+        <div className="whitespace-nowrap">
+          <p className="font-medium text-gray-800">{row.employee?.fullName ?? `#${row.employeeId}`}</p>
+          <p className="text-xs text-gray-400">{row.employee?.department?.name} · {row.employee?.code}</p>
+        </div>
+      ),
+    },
+    {
+      title: t('leave.colTotal'),
+      key: 'total',
+      width: 100,
+      align: 'center',
+      render: (_, row) => <span className="font-medium">{Number(row.total)}</span>,
+    },
+    {
+      title: t('leave.colUsed'),
+      key: 'used',
+      width: 100,
+      align: 'center',
+      render: (_, row) => <span className="text-amber-600">{Number(row.used)}</span>,
+    },
+    {
+      title: t('leave.colRemaining'),
+      key: 'remaining',
+      width: 110,
+      align: 'center',
+      render: (_, row) => <span className="font-semibold text-emerald-600">{Number(row.remaining)}</span>,
+    },
+    {
+      title: t('leave.colUsage'),
+      key: 'usage',
+      width: 140,
+      render: (_, row) => {
+        const total = Number(row.total);
+        const used = Number(row.used);
+        const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+        return (
+          <div className="w-28">
+            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className={['h-full rounded-full', pct >= 90 ? 'bg-red-400' : pct >= 60 ? 'bg-amber-400' : 'bg-emerald-400'].join(' ')}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-400">{pct}%</span>
+          </div>
+        );
+      },
+    },
+    {
+      title: '',
+      key: 'action',
+      width: 90,
+      align: 'center',
+      fixed: 'right',
+      render: (_, row) => (
+        <Button size="small" type="link" onClick={() => openEdit(row)}>
+          {t('leave.setBalance')}
+        </Button>
+      ),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [t]);
+
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-base font-semibold text-gray-800">{t('leave.adminBalances')}</h3>
         <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <Input.Search
+            allowClear
             placeholder={t('employee.searchPlaceholder')}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-56"
+            onSearch={setSearch}
+            onChange={(e) => { if (!e.target.value) setSearch(''); }}
           />
-          {accrueMsg && <span className="text-sm text-emerald-600">{accrueMsg}</span>}
-          <Button size="sm" variant="secondary" loading={accruing} onClick={runAccrual}>
-            {t('leave.runAccrual')}
-          </Button>
         </div>
       </div>
 
-      {error && <div className="px-6 py-3"><Alert variant="error" message={error} /></div>}
+      {error && <Alert type="error" title={error} />}
 
-      {loading ? (
-        <PageSpinner />
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-gray-100 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-              <tr>
-                <th className="px-6 py-3 text-left whitespace-nowrap min-w-[160px]">{t('leave.colEmployee')}</th>
-                <th className="px-6 py-3 text-center whitespace-nowrap">{t('leave.colTotal')}</th>
-                <th className="px-6 py-3 text-center whitespace-nowrap">{t('leave.colUsed')}</th>
-                <th className="px-6 py-3 text-center whitespace-nowrap">{t('leave.colRemaining')}</th>
-                <th className="px-6 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('leave.colUsage')}</th>
-                <th className="px-6 py-3 whitespace-nowrap" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filteredRows.map((row) => {
-                const total = Number(row.total);
-                const used = Number(row.used);
-                const remaining = Number(row.remaining);
-                const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
-                return (
-                  <tr key={row.employeeId} className="hover:bg-gray-50">
-                    <td className="px-6 py-3">
-                      <p className="font-medium text-gray-800">{row.employee?.fullName ?? `#${row.employeeId}`}</p>
-                      <p className="text-xs text-gray-400">{row.employee?.department?.name} · {row.employee?.code}</p>
-                    </td>
-                    <td className="px-6 py-3 text-center font-medium">{total}</td>
-                    <td className="px-6 py-3 text-center text-amber-600">{used}</td>
-                    <td className="px-6 py-3 text-center font-semibold text-emerald-600">{remaining}</td>
-                    <td className="px-6 py-3 w-32 hidden md:table-cell">
-                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div
-                          className={['h-full rounded-full', pct >= 90 ? 'bg-red-400' : pct >= 60 ? 'bg-amber-400' : 'bg-emerald-400'].join(' ')}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-400">{pct}%</span>
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      <button onClick={() => openEdit(row)} className="text-xs text-indigo-600 hover:underline">
-                        {t('leave.setBalance')}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredRows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-400">
-                    {t('leave.noBalanceRecords')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <DataTable
+          rowKey="employeeId"
+          loading={loading}
+          columns={columns}
+          dataSource={filteredRows}
+          pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
+          locale={{ emptyText: t('leave.noBalanceRecords') }}
+        />
+      </div>
 
       {/* Set balance modal */}
       <Modal
         open={!!editRow}
-        onClose={() => setEditRow(null)}
+        onCancel={() => setEditRow(null)}
         title={t('leave.setBalanceTitle', { name: editRow?.employee?.fullName ?? '' })}
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" size="sm" onClick={() => setEditRow(null)}>{t('common.cancel')}</Button>
-            <Button size="sm" loading={saving} onClick={saveEdit}>{t('common.save')}</Button>
-          </>
-        }
+        onOk={saveEdit}
+        confirmLoading={saving}
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <div className="space-y-4">
-          {saveError && <Alert variant="error" message={saveError} />}
-          <Input
-            label={t('leave.totalLeaveDays')}
-            type="number"
-            min="0"
-            step="0.5"
-            value={editTotal}
-            onChange={(e) => setEditTotal(e.target.value)}
-          />
-          <Input
-            label={t('leave.reasonOptional')}
-            placeholder={t('leave.reasonPlaceholderAccrual')}
-            value={editReason}
-            onChange={(e) => setEditReason(e.target.value)}
-          />
+          {saveError && <Alert type="error" title={saveError} />}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">{t('leave.totalLeaveDays')}</label>
+            <Input type="number" min={0} step={0.5} value={editTotal} onChange={(e) => setEditTotal(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">{t('leave.reasonOptional')}</label>
+            <Input placeholder={t('leave.reasonPlaceholderAccrual')} value={editReason} onChange={(e) => setEditReason(e.target.value)} />
+          </div>
         </div>
       </Modal>
     </div>
@@ -246,9 +270,9 @@ export default function LeavePage() {
   const [pendingLoading, setPendingLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [statusFilter, setStatusFilter] = useState<string | undefined>('pending');
   const [pageError, setPageError] = useState('');
-  const { page, limit, next, prev, reset, goTo } = usePagination(20);
+  const { page, limit, reset, goTo } = usePagination(10);
 
   const isApprover = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
   const isAdminOrHR = user?.role === 'admin' || user?.role === 'hr';
@@ -287,14 +311,21 @@ export default function LeavePage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadPending(); }, [loadPending]);
 
-  async function handleApprove(id: number) {
-    try {
-      await leaveService.approve(id);
-      load();
-      loadPending();
-    } catch (err) {
-      setPageError(extractError(err, 'Approve failed'));
-    }
+  function handleApprove(id: number) {
+    Modal.confirm({
+      title: t('leave.approveConfirm', 'Bạn có chắc muốn phê duyệt yêu cầu nghỉ phép này?'),
+      okText: t('common.confirm', 'Xác nhận'),
+      cancelText: t('common.cancel', 'Hủy'),
+      onOk: async () => {
+        try {
+          await leaveService.approve(id);
+          load();
+          loadPending();
+        } catch (err) {
+          setPageError(extractError(err, 'Approve failed'));
+        }
+      },
+    });
   }
 
   async function handleReject(comments: string) {
@@ -309,20 +340,145 @@ export default function LeavePage() {
     }
   }
 
-  async function handleCancel(id: number) {
-    try {
-      await leaveService.cancel(id);
-      load();
-    } catch (err) {
-      setPageError(extractError(err, 'Cancel failed'));
-    }
+  function handleCancel(id: number) {
+    Modal.confirm({
+      title: t('leave.cancelConfirm', 'Bạn có chắc muốn hủy yêu cầu nghỉ phép này?'),
+      okText: t('common.confirm', 'Xác nhận'),
+      cancelText: t('common.cancel', 'Hủy'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await leaveService.cancel(id);
+          load();
+        } catch (err) {
+          setPageError(extractError(err, 'Cancel failed'));
+        }
+      },
+    });
   }
+
+  const columns: ColumnsType<LeaveRequest> = useMemo(() => {
+    const cols: ColumnsType<LeaveRequest> = [];
+    if (isAdminOrHR) {
+      cols.push({
+        title: t('leave.colEmployee'),
+        key: 'employee',
+        width: 180,
+        render: (_, leave) => (
+          <div className="whitespace-nowrap">
+            <p className="font-medium text-gray-900">{leave.employee?.fullName ?? `#${leave.employeeId}`}</p>
+            <p className="text-xs text-gray-400">{leave.employee?.department?.name}</p>
+          </div>
+        ),
+      });
+    }
+    cols.push(
+      {
+        title: t('leave.colType'),
+        dataIndex: 'type',
+        key: 'type',
+        width: 130,
+        render: (type: string) => <StatusTag variant={TYPE_VARIANT[type] ?? 'default'} label={t(`leave.${type}`, type)} />,
+      },
+      {
+        title: 'Lý do',
+        dataIndex: 'reason',
+        key: 'reason',
+        width: 200,
+        ellipsis: true,
+        render: (reason: string) => reason || <span className="text-gray-300">—</span>,
+      },
+      {
+        title: t('leave.colDateRange'),
+        key: 'dateRange',
+        width: 180,
+        render: (_, leave) => (
+          <span className="whitespace-nowrap">
+            {formatDate(leave.fromDate)}
+            {leave.fromDate !== leave.toDate && <> <span className="text-gray-400">→</span> {formatDate(leave.toDate)}</>}
+            {leave.isHalfDay && <span className="ml-1 text-xs text-purple-600">(½)</span>}
+          </span>
+        ),
+      },
+      {
+        title: t('leave.colDays'),
+        dataIndex: 'days',
+        key: 'days',
+        width: 90,
+        align: 'center',
+        render: (days: number) => <span className="font-medium text-gray-800">{days}</span>,
+      },
+      {
+        title: t('leave.colStatus'),
+        dataIndex: 'status',
+        key: 'status',
+        width: 110,
+        render: (status: string) => <StatusTag variant={STATUS_VARIANT[status] ?? 'default'} label={t(`common.${status}`, status)} />,
+      },
+      {
+        title: t('leave.colStep'),
+        key: 'step',
+        width: 80,
+        render: (_, leave) => <span className="text-xs text-gray-500">{leave.currentStep}/2</span>,
+      },
+      {
+        title: '',
+        key: 'action',
+        width: 90,
+        align: 'center',
+        fixed: 'right',
+        render: (_, leave) => (
+          <div className="flex items-center justify-center gap-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+            {canActOnLeaveRequest(leave, user) && (
+              <>
+                <button
+                  type="button"
+                  title={t('leave.approve')}
+                  onClick={() => handleApprove(leave.id)}
+                  className="rounded p-1 text-green-500 hover:bg-green-50 transition-colors cursor-pointer"
+                >
+                  <CheckCircle size={15} />
+                </button>
+                <button
+                  type="button"
+                  title={t('leave.reject')}
+                  onClick={() => setRejectTarget(leave)}
+                  className="rounded p-1 text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                >
+                  <XCircle size={15} />
+                </button>
+              </>
+            )}
+            {((leave.status === 'pending' && leave.employeeId === user?.id) ||
+              (leave.status === 'approved' && user?.role === 'admin')) && (
+              <button
+                type="button"
+                title={t('leave.cancel')}
+                onClick={() => handleCancel(leave.id)}
+                className="rounded p-1 text-amber-500 hover:bg-amber-50 transition-colors cursor-pointer"
+              >
+                <Ban size={15} />
+              </button>
+            )}
+          </div>
+        ),
+      },
+    );
+    return cols;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminOrHR, user, t]);
+
+  const newRequestButton = (
+    <Button type="primary" icon={<Plus size={14} />} onClick={() => setShowModal(true)}>
+      {t('leave.requestLeave')}
+    </Button>
+  );
 
   return (
     <AppShell title={t('leave.title')}>
       <div className="space-y-5">
 
-        {pageError && <Alert variant="error" message={pageError} />}
+        {pageError && <Alert type="error" title={pageError} />}
 
         {/* Pending approvals */}
         {isApprover && (
@@ -335,180 +491,48 @@ export default function LeavePage() {
         )}
 
         {/* Leave requests table */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
-            <div className="flex items-center gap-2 flex-wrap">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
               <h3 className="text-base font-semibold text-gray-800">{t('leave.allRequests')}</h3>
-              <select
+              <Select
                 value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); reset(); }}
-                className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">{t('leave.allStatus')}</option>
-                <option value="pending">{t('common.pending')}</option>
-                <option value="approved">{t('common.approved')}</option>
-                <option value="rejected">{t('common.rejected')}</option>
-                <option value="cancelled">{t('common.cancelled')}</option>
-              </select>
+                allowClear
+                placeholder={t('leave.allStatus')}
+                className="w-40"
+                onChange={(val) => { setStatusFilter(val); reset(); }}
+                options={[
+                  { value: 'pending', label: t('common.pending') },
+                  { value: 'approved', label: t('common.approved') },
+                  { value: 'rejected', label: t('common.rejected') },
+                  { value: 'cancelled', label: t('common.cancelled') },
+                ]}
+              />
             </div>
-            <Button onClick={() => setShowModal(true)} size="sm">{t('leave.requestLeave')}</Button>
+            <div className="flex items-center gap-2">
+              <ReloadButton onClick={load} loading={loading} />
+              {newRequestButton}
+            </div>
           </div>
 
-          {loading ? (
-            <PageSpinner />
-          ) : (
-            <>
-              {/* ── Mobile card list ── */}
-              <div className="sm:hidden divide-y divide-gray-50">
-                {result?.data.length === 0 && (
-                  <p className="px-5 py-10 text-center text-sm text-gray-400">{t('leave.noRequests')}</p>
-                )}
-                {result?.data.map((leave) => (
-                  <div
-                    key={leave.id}
-                    onClick={() => router.push(`/leave/${leave.id}`)}
-                    className="px-4 py-3 space-y-2 cursor-pointer active:bg-gray-50"
-                  >
-                    {/* Row 1: employee (admin/HR only) */}
-                    {isAdminOrHR && (
-                      <div>
-                        <p className="font-semibold text-gray-900 text-sm">{leave.employee?.fullName ?? `#${leave.employeeId}`}</p>
-                        <p className="text-xs text-gray-400">{leave.employee?.department?.name}</p>
-                      </div>
-                    )}
-                    {/* Row 2: type + status + days */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {statusBadge(leave.type)}
-                        {statusBadge(leave.status)}
-                        {leave.isHalfDay && (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-purple-50 text-purple-700">
-                            ½ ngày
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-bold text-indigo-600 text-sm">{leave.days}d</span>
-                    </div>
-                    {/* Row 3: date range */}
-                    <p className="text-xs text-gray-600">
-                      {formatDate(leave.fromDate)}
-                      {leave.fromDate !== leave.toDate && (
-                        <> <span className="text-gray-400">→</span> {formatDate(leave.toDate)}</>
-                      )}
-                    </p>
-                    {/* Row 4: actions */}
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      {canActOnLeaveRequest(leave, user) && (
-                        <>
-                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => handleApprove(leave.id)}>
-                            {t('leave.approve')}
-                          </Button>
-                          <Button size="sm" variant="danger" onClick={() => setRejectTarget(leave)}>
-                            {t('leave.reject')}
-                          </Button>
-                        </>
-                      )}
-                      {/* Pending: employee cancel own; Approved: admin only */}
-                      {((leave.status === 'pending' && leave.employeeId === user?.id) ||
-                        (leave.status === 'approved' && user?.role === 'admin')) && (
-                        <Button size="sm" variant="ghost" onClick={() => handleCancel(leave.id)}>
-                          {t('leave.cancel')}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* ── Desktop table ── */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="border-b border-gray-100 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-                    <tr>
-                      {isAdminOrHR && <th className="px-6 py-3 text-left whitespace-nowrap min-w-[160px]">{t('leave.colEmployee')}</th>}
-                      <th className="px-6 py-3 text-left whitespace-nowrap">{t('leave.colType')}</th>
-                      <th className="px-6 py-3 text-left whitespace-nowrap hidden lg:table-cell">Lý do</th>
-                      <th className="px-6 py-3 text-left whitespace-nowrap">{t('leave.colDateRange')}</th>
-                      <th className="px-6 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('leave.colDays')}</th>
-                      <th className="px-6 py-3 text-left whitespace-nowrap">{t('leave.colStatus')}</th>
-                      <th className="px-6 py-3 text-left whitespace-nowrap hidden lg:table-cell">{t('leave.colStep')}</th>
-                      <th className="px-6 py-3 text-left whitespace-nowrap">{t('leave.colActions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {result?.data.map((leave) => (
-                      <tr
-                        key={leave.id}
-                        onClick={() => router.push(`/leave/${leave.id}`)}
-                        className="cursor-pointer hover:bg-gray-50 transition-colors"
-                      >
-                        {isAdminOrHR && (
-                          <td className="px-6 py-3">
-                            <p className="font-medium text-gray-900">{leave.employee?.fullName ?? `#${leave.employeeId}`}</p>
-                            <p className="text-xs text-gray-400">{leave.employee?.department?.name}</p>
-                          </td>
-                        )}
-                        <td className="px-6 py-3">{statusBadge(leave.type)}</td>
-                        <td className="px-6 py-3 text-gray-600 max-w-[200px] hidden lg:table-cell">
-                          <p className="truncate text-sm" title={leave.reason}>{leave.reason || <span className="text-gray-300">—</span>}</p>
-                        </td>
-                        <td className="px-6 py-3 text-gray-600 whitespace-nowrap">
-                          {formatDate(leave.fromDate)}
-                          {leave.fromDate !== leave.toDate && (
-                            <> <span className="text-gray-400">→</span> {formatDate(leave.toDate)}</>
-                          )}
-                        </td>
-                        <td className="px-6 py-3 font-medium text-gray-800 hidden md:table-cell">{leave.days}</td>
-                        <td className="px-6 py-3">{statusBadge(leave.status)}</td>
-                        <td className="px-6 py-3 text-gray-500 text-xs hidden lg:table-cell">{leave.currentStep}/2</td>
-                        <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex gap-2">
-                            {canActOnLeaveRequest(leave, user) && (
-                              <>
-                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => handleApprove(leave.id)}>
-                                  {t('leave.approve')}
-                                </Button>
-                                <Button size="sm" variant="danger" onClick={() => setRejectTarget(leave)}>
-                                  {t('leave.reject')}
-                                </Button>
-                              </>
-                            )}
-                            {/* Pending: employee cancel own; Approved: admin only */}
-                            {((leave.status === 'pending' && leave.employeeId === user?.id) ||
-                              (leave.status === 'approved' && user?.role === 'admin')) && (
-                              <Button size="sm" variant="ghost" onClick={() => handleCancel(leave.id)}>
-                                {t('leave.cancel')}
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {result?.data.length === 0 && (
-                      <tr>
-                        <td colSpan={isAdminOrHR ? 8 : 7} className="px-6 py-12 text-center text-sm text-gray-400" style={{ display: 'table-cell' }}>
-                          {t('leave.noRequests')}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Always show pagination */}
-              {result && (
-                <Pagination
-                  page={page}
-                  totalPages={result.meta.totalPages || 1}
-                  total={result.meta.total}
-                  limit={limit}
-                  onPrev={prev}
-                  onNext={next}
-                  onGoTo={goTo}
-                />
-              )}
-            </>
-          )}
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <DataTable
+              rowKey="id"
+              loading={loading}
+              columns={columns}
+              dataSource={result?.data ?? []}
+              page={page}
+              pageSize={limit}
+              total={result?.meta.total ?? 0}
+              onPageChange={goTo}
+              scroll={{ x: 'max-content' }}
+              onRow={(leave) => ({
+                onClick: () => router.push(`/leave/${leave.id}`),
+                className: 'cursor-pointer',
+              })}
+              locale={{ emptyText: t('leave.noRequests') }}
+            />
+          </div>
         </div>
 
         {/* Admin: all balances */}
