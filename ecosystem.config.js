@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'hr-backend',
       script: 'dist/src/main.js',
-      cwd: '/home/phamhai/hr/hr_project/backend',
+      cwd: '/home/dcorp/hr/backend',
       instances: 2,
       exec_mode: 'cluster',
       autorestart: true,
@@ -25,7 +25,7 @@ module.exports = {
       name: 'hr-frontend',
       script: 'node_modules/.bin/next',
       args: 'start --port 3000 --hostname 0.0.0.0',
-      cwd: '/home/phamhai/hr/hr_project/frontend',
+      cwd: '/home/dcorp/hr/frontend',
       instances: 2,
       exec_mode: 'cluster',
       autorestart: true,
