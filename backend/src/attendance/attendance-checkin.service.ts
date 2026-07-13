@@ -20,7 +20,7 @@ export class AttendanceCheckinService {
 
   // ─── Check-in ─────────────────────────────────────────────────────────────
 
-  async checkIn(employeeId: number, dto: CheckInDto) {
+  async checkIn(employeeId: number, dto: CheckInDto, ipAddress?: string) {
     const ts = dto.timestamp ? new Date(dto.timestamp) : new Date();
     const sessionDate = computeSessionDate(ts);
     const dateStr = sessionDate.toISOString().split('T')[0];
@@ -32,8 +32,16 @@ export class AttendanceCheckinService {
         shiftId: true,
         workingMode: true,
         office: { select: { latitude: true, longitude: true, radius: true, name: true } },
+        department: { select: { branch: { select: { latitude: true, longitude: true, radius: true, name: true } } } },
       },
     });
+    // Fall back to the employee's department branch when no personal office is assigned
+    // (most employees are geofenced via their department's branch, not a personal office).
+    const officeSource = emp?.office ?? (
+      emp?.department?.branch?.latitude != null && emp?.department?.branch?.longitude != null
+        ? emp.department.branch
+        : null
+    );
 
     // 2. Resolve shift (multi-shift aware)
     const shift = await this.shiftResolver.resolveTargetShift(employeeId, ts, dto.shiftId);
@@ -74,9 +82,9 @@ export class AttendanceCheckinService {
     let isInOffice = false;
     let officeStatus: 'IN_OFFICE' | 'OUTSIDE' | null = null;
 
-    if (hasGps && emp?.office) {
-      const { latitude, longitude, radius } = emp.office;
-      const dist = haversineMetres(dto.lat!, dto.lng!, latitude, longitude);
+    if (hasGps && officeSource) {
+      const { latitude, longitude, radius } = officeSource;
+      const dist = haversineMetres(dto.lat!, dto.lng!, latitude!, longitude!);
       officeDistanceM = Math.round(dist);
       isInOffice = dist <= radius;
       officeStatus = isInOffice ? 'IN_OFFICE' : 'OUTSIDE';
@@ -124,7 +132,7 @@ export class AttendanceCheckinService {
       if (!hasGps) {
         throw new BadRequestException('GPS location is required or provide a reason (Working from client, etc.)');
       }
-      const officeName = emp?.office?.name || 'an authorized office';
+      const officeName = officeSource?.name || 'an authorized office';
       throw new BadRequestException(`You are outside "${officeName}". Please provide a reason to clock in.`);
     }
 
@@ -193,7 +201,10 @@ export class AttendanceCheckinService {
         lng: dto.lng,
         locationId: resolvedLocationId,
         deviceId: dto.deviceId,
+        ipAddress,
         distanceM,
+        isInOffice,
+        officeDistanceM,
         note: locationNote,
         attendanceId: attendance.id,
       },
@@ -214,7 +225,7 @@ export class AttendanceCheckinService {
 
   // ─── Check-out ────────────────────────────────────────────────────────────
 
-  async checkOut(employeeId: number, dto: CheckOutDto) {
+  async checkOut(employeeId: number, dto: CheckOutDto, ipAddress?: string) {
     const ts = dto.timestamp ? new Date(dto.timestamp) : new Date();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -269,16 +280,27 @@ export class AttendanceCheckinService {
     const hasGps = dto.lat != null && dto.lng != null;
     let isInOffice = false;
     let officeName = 'office';
+    let checkoutOfficeDistanceM: number | undefined;
 
     if (hasGps) {
       const emp = await this.prisma.employee.findUnique({
         where: { id: employeeId },
-        select: { office: { select: { latitude: true, longitude: true, radius: true, name: true } } },
+        select: {
+          office: { select: { latitude: true, longitude: true, radius: true, name: true } },
+          department: { select: { branch: { select: { latitude: true, longitude: true, radius: true, name: true } } } },
+        },
       });
-      if (emp?.office) {
-        officeName = emp.office.name;
-        const dist = haversineMetres(dto.lat!, dto.lng!, emp.office.latitude, emp.office.longitude);
-        isInOffice = dist <= emp.office.radius;
+      // Fall back to the employee's department branch when no personal office is assigned
+      const officeSource = emp?.office ?? (
+        emp?.department?.branch?.latitude != null && emp?.department?.branch?.longitude != null
+          ? emp.department.branch
+          : null
+      );
+      if (officeSource) {
+        officeName = officeSource.name ?? officeName;
+        const dist = haversineMetres(dto.lat!, dto.lng!, officeSource.latitude!, officeSource.longitude!);
+        checkoutOfficeDistanceM = Math.round(dist);
+        isInOffice = dist <= officeSource.radius;
       }
     }
 
@@ -311,6 +333,11 @@ export class AttendanceCheckinService {
       throw new BadRequestException(`You are outside "${officeName}". Please provide a reason to clock out.`);
     }
 
+    // Upgrade office status if within branch/geofence (same rule as check-in)
+    if (!isInOffice && (isWithinBranch || isWithinGeofence)) {
+      isInOffice = true;
+    }
+
     // Device validation (warn-only for checkout — user may have switched device)
     const { unknown: isUnknownDeviceOut } = await this.deviceValidation.validateForCheckOut(
       employeeId,
@@ -340,6 +367,8 @@ export class AttendanceCheckinService {
         checkoutLat: dto.lat,
         checkoutLng: dto.lng,
         checkoutNote: checkoutUnknownNote + (locationNote ?? ''),
+        checkoutOfficeDistanceM,
+        checkoutIsInOffice: isInOffice,
       },
     });
 
@@ -352,7 +381,10 @@ export class AttendanceCheckinService {
         lng: dto.lng,
         locationId: resolvedLocationId,
         deviceId: dto.deviceId,
+        ipAddress,
         distanceM,
+        isInOffice,
+        officeDistanceM: checkoutOfficeDistanceM,
         note: locationNote,
         attendanceId: target.id,
       },

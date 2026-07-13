@@ -1,7 +1,7 @@
 'use client';
 
 import type { DayCell, CellStatus, ShiftEntry } from './admin-attendance-report-types';
-import { STATUS_META } from './admin-attendance-report-types';
+import { STATUS_META, fmtDistanceKm } from './admin-attendance-report-types';
 
 // ─── Colour tokens — same palette as the fixed-schedule grid ─────────────────
 
@@ -99,15 +99,25 @@ function TooltipFlags({ cell }: { cell: DayCell }) {
   const hasEarly   = (cell.earlyMinutes ?? 0) > 0 || shifts.some(s => (s.earlyMinutes ?? 0) > 0);
   const corrected  = cell.isCorrected || cell.correctionStatus === 'approved'
                      || shifts.some(s => s.correctionStatus === 'approved');
-  const inOffice   = cell.isInOffice === true;
+  const inOffice   = !!cell.hasCheckinGps && cell.isInOffice === true;
+  const outOffice  = !!cell.hasCheckinGps && cell.isInOffice === false;
+  const hasCheckoutGpsData = !!cell.checkoutTime && !!cell.hasCheckoutGps;
+  const checkoutInOffice  = hasCheckoutGpsData && cell.checkoutIsInOffice === true;
+  const checkoutOutOffice = hasCheckoutGpsData && cell.checkoutIsInOffice === false;
 
-  if (!hasLate && !hasEarly && !corrected && !inOffice) return null;
+  if (!hasLate && !hasEarly && !corrected && !inOffice && !outOffice && !checkoutInOffice && !checkoutOutOffice) return null;
+
+  const inDist  = cell.officeDistanceM != null ? ` (${fmtDistanceKm(cell.officeDistanceM)})` : '';
+  const outDist = cell.checkoutOfficeDistanceM != null ? ` (${fmtDistanceKm(cell.checkoutOfficeDistanceM)})` : '';
 
   const flags: { label: string; bg: string; color: string }[] = [];
   if (hasLate)   flags.push({ label: 'Đi muộn',        bg: 'oklch(58% 0.20 28 / 0.15)',  color: 'oklch(44% 0.20 28)'  });
   if (hasEarly)  flags.push({ label: 'Về sớm',          bg: 'oklch(54% 0.13 245 / 0.15)', color: 'oklch(40% 0.13 245)' });
   if (corrected) flags.push({ label: 'Đã điều chỉnh',   bg: 'oklch(71% 0.10 295 / 0.18)', color: 'oklch(42% 0.14 295)' });
-  if (inOffice)  flags.push({ label: 'Trong VP',        bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' });
+  if (inOffice)  flags.push({ label: `Vào: Trong VP${inDist}`,   bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' });
+  if (outOffice) flags.push({ label: `Vào: Ngoài VP${inDist}`,   bg: 'oklch(52% 0.22 18 / 0.12)',  color: 'oklch(52% 0.22 18)'  });
+  if (checkoutInOffice)  flags.push({ label: `Ra: Trong VP${outDist}`, bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' });
+  if (checkoutOutOffice) flags.push({ label: `Ra: Ngoài VP${outDist}`, bg: 'oklch(52% 0.22 18 / 0.12)',  color: 'oklch(52% 0.22 18)'  });
 
   return (
     <div className="mb-2 flex flex-wrap gap-1">

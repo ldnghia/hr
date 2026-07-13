@@ -304,9 +304,19 @@ export class AttendanceExportCombinedService {
       });
     }
 
+    // Office location totals — gated on GPS presence (checkinLat/checkoutLat != null) so
+    // sessions without any GPS data (old records, or manual reason-only check-in/out) are
+    // excluded rather than miscounted as "outside" (isInOffice defaults to false, not null).
+    const officeTotals = {
+      checkinInOffice:  records.filter((r: any) => r.checkinTime && !r.isOnLeave && r.checkinLat != null && r.isInOffice).length,
+      checkinOutside:   records.filter((r: any) => r.checkinTime && !r.isOnLeave && r.checkinLat != null && !r.isInOffice).length,
+      checkoutInOffice: records.filter((r: any) => r.checkoutTime && r.checkoutLat != null && r.checkoutIsInOffice).length,
+      checkoutOutside:  records.filter((r: any) => r.checkoutTime && r.checkoutLat != null && !r.checkoutIsInOffice).length,
+    };
+
     const wb = new ExcelJS.Workbook();
     this.addGridSheet(wb, employees, days, lookup, workingMode, shiftLookup, fixedCorrectedSet);
-    this.addSummarySheet(wb, summaries, start, end, officialWorkingDays, officialHolidayDays, workingMode);
+    this.addSummarySheet(wb, summaries, start, end, officialWorkingDays, officialHolidayDays, workingMode, officeTotals);
 
     const month = String(start.getMonth() + 1).padStart(2, '0');
     const year  = start.getFullYear();
@@ -475,6 +485,7 @@ export class AttendanceExportCombinedService {
     wb: ExcelJS.Workbook, summaries: EmployeeSummary[],
     start: Date, end: Date, officialWorkingDays: number, officialHolidayDays: number,
     workingMode: 'FIXED' | 'SHIFT',
+    officeTotals: { checkinInOffice: number; checkinOutside: number; checkoutInOffice: number; checkoutOutside: number },
   ) {
     const ws = wb.addWorksheet('Báo Cáo Ngày Công');
     // FIXED: Ngày công | Đi trễ | Về sớm | Chỉnh sửa
@@ -616,5 +627,42 @@ export class AttendanceExportCombinedService {
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
       });
+
+    // ── Office location totals block ──────────────────────────────────────
+    const olTitleRow = ti + 2;
+    ws.mergeCells(olTitleRow, 1, olTitleRow, COLS.length);
+    const olTitle = ws.getCell(olTitleRow, 1);
+    olTitle.value = 'TỔNG SỐ LẦN CHẤM CÔNG TRONG / NGOÀI VĂN PHÒNG';
+    olTitle.font = { bold: true, size: 10 };
+    olTitle.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(olTitleRow).height = 20;
+
+    const olLabelRow = olTitleRow + 1;
+    const olValueRow = olTitleRow + 2;
+    const olCols: { label: string; value: number; bg: string }[] = [
+      { label: 'Vào trong VP',  value: officeTotals.checkinInOffice,  bg: 'FFE8F5E9' },
+      { label: 'Vào ngoài VP',  value: officeTotals.checkinOutside,   bg: 'FFFFEBEE' },
+      { label: 'Ra trong VP',   value: officeTotals.checkoutInOffice, bg: 'FFE8F5E9' },
+      { label: 'Ra ngoài VP',   value: officeTotals.checkoutOutside,  bg: 'FFFFEBEE' },
+    ];
+    olCols.forEach((c, i) => {
+      ws.mergeCells(olLabelRow, 1 + i * 2, olLabelRow, 2 + i * 2);
+      const labelCell = ws.getCell(olLabelRow, 1 + i * 2);
+      labelCell.value = c.label;
+      labelCell.font = { bold: true, size: 9 };
+      labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      labelCell.border = BORDER;
+      labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: c.bg } };
+
+      ws.mergeCells(olValueRow, 1 + i * 2, olValueRow, 2 + i * 2);
+      const valueCell = ws.getCell(olValueRow, 1 + i * 2);
+      valueCell.value = c.value;
+      valueCell.font = { bold: true, size: 12 };
+      valueCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      valueCell.border = BORDER;
+      valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: c.bg } };
+    });
+    ws.getRow(olLabelRow).height = 16;
+    ws.getRow(olValueRow).height = 22;
   }
 }

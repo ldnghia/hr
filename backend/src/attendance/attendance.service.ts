@@ -33,12 +33,12 @@ export class AttendanceService {
 
   // ─── WFM: Check-in / Check-out ────────────────────────────────────────────
 
-  checkIn(employeeId: number, dto: CheckInDto) {
-    return this.checkinService.checkIn(employeeId, dto);
+  checkIn(employeeId: number, dto: CheckInDto, ipAddress?: string) {
+    return this.checkinService.checkIn(employeeId, dto, ipAddress);
   }
 
-  checkOut(employeeId: number, dto: CheckOutDto) {
-    return this.checkinService.checkOut(employeeId, dto);
+  checkOut(employeeId: number, dto: CheckOutDto, ipAddress?: string) {
+    return this.checkinService.checkOut(employeeId, dto, ipAddress);
   }
 
   // ─── Legacy manual check (no GPS, no shift resolution) ───────────────────

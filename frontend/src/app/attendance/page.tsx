@@ -114,6 +114,7 @@ export default function AttendancePage() {
     loadingShiftId, actionMsg,
     pickerOpen, pickerSessions, setPickerOpen,
     handleCheckIn, handleCheckOut, handlePickerSelect,
+    guardReason,
   } = useCheckinCheckout({
     geo,
     needsReason,
@@ -196,6 +197,7 @@ export default function AttendancePage() {
                     sessionsLoading={sessionsLoading} shiftsLoading={shiftsLoading}
                     loadingShiftId={loadingShiftId}
                     onCheckIn={handleCheckIn} onCheckOut={handleCheckOut}
+                    canCheckOut={guardReason}
                     isShiftEmployee={workingMode === 'SHIFT'}
                     onAutoCheckIn={handleCheckIn}
                     unclosedSessions={unclosed}

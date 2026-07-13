@@ -32,6 +32,9 @@ export interface SessionCardProps {
   onCheckIn: () => void;
   /** Called when user clicks Check Out on this card */
   onCheckOut: () => void;
+  /** Returns true if check-out may proceed; false blocks opening the confirm modal
+   *  (the caller has already focused/highlighted the reason box). */
+  canCheckOut?: () => boolean;
   /** When true, show "Ca hiện tại" badge next to status pill */
   isRecommended?: boolean;
 }
@@ -44,6 +47,7 @@ export function SessionCard({
   actionLoading,
   onCheckIn,
   onCheckOut,
+  canCheckOut,
   isRecommended = false,
 }: SessionCardProps) {
   const { t } = useTranslation();
@@ -144,7 +148,10 @@ export function SessionCard({
             variant="secondary"
             className="w-full"
             loading={actionLoading}
-            onClick={() => setConfirmingCheckout(true)}
+            onClick={() => {
+              if (canCheckOut && !canCheckOut()) return;
+              setConfirmingCheckout(true);
+            }}
           >
             {t('attendance.checkOut')}
           </Button>

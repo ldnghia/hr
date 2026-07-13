@@ -36,6 +36,9 @@ export interface UseCheckinCheckoutResult {
   handleCheckIn: (shiftId: number) => Promise<void>;
   handleCheckOut: (shiftId: number) => Promise<void>;
   handlePickerSelect: (shiftId: number) => Promise<void>;
+  /** Returns true if a reason isn't required or is already filled in; otherwise
+   *  focuses the reason box and sets the error, without performing check-out. */
+  guardReason: () => boolean;
 }
 
 /** Encapsulates check-in / check-out / picker logic for the attendance page. */
@@ -180,5 +183,6 @@ export function useCheckinCheckout({
     handleCheckIn,
     handleCheckOut,
     handlePickerSelect,
+    guardReason,
   };
 }

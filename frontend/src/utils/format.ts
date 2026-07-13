@@ -49,6 +49,11 @@ export function formatHours(hours?: number | string | null): string {
   return `${n.toFixed(1)} h`;
 }
 
+/** Format a distance in metres → "X.XXkm" */
+export function formatDistanceKm(m: number): string {
+  return `${(m / 1000).toFixed(2)}km`;
+}
+
 /** Returns the number of calendar days from today to dateStr (negative = past). */
 export function daysUntil(dateStr?: string | null): number | null {
   if (!dateStr) return null;

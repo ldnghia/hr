@@ -69,6 +69,10 @@ export interface TodaySessionsListProps {
   loadingShiftId: number | null;
   onCheckIn: (shiftId: number) => void;
   onCheckOut: (shiftId: number) => void;
+  /** Returns true if check-out may proceed (reason not required or already filled).
+   *  Called before opening the confirm modal; when false, the caller has already
+   *  focused/highlighted the reason box, so the modal must not open. */
+  canCheckOut?: () => boolean;
   /** Whether the employee is in SHIFT working mode */
   isShiftEmployee?: boolean;
   /** Called when user taps "Chấm công ngay" on the auto-detect banner */
@@ -87,6 +91,7 @@ export function TodaySessionsList({
   loadingShiftId,
   onCheckIn,
   onCheckOut,
+  canCheckOut,
   isShiftEmployee = false,
   onAutoCheckIn,
   unclosedSessions = [],
@@ -173,6 +178,7 @@ export function TodaySessionsList({
             isRecommended={shift.shiftId === recommendedShiftId}
             onCheckIn={() => onCheckIn(shift.shiftId)}
             onCheckOut={() => onCheckOut(shift.shiftId)}
+            canCheckOut={canCheckOut}
           />
         );
       })}

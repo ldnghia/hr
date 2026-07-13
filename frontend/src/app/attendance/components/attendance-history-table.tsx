@@ -3,7 +3,7 @@
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { formatDate, formatDateTime, formatHours } from '@/utils/format';
+import { formatDate, formatDateTime, formatHours, formatDistanceKm } from '@/utils/format';
 import { CorrectedBadge } from './corrected-badge';
 import type { AttendanceRecord } from '@/types';
 
@@ -76,11 +76,26 @@ export function AttendanceHistoryTable({
               <td className="px-6 py-3">
                 <div className="flex flex-wrap items-center gap-1">
                   <WfmBadges record={rec} />
-                  {rec.isInOffice !== undefined && (
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
-                      rec.isInOffice ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-                    }`}>
-                      {rec.isInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}
+                  {rec.checkinLat != null && (
+                    <span
+                      title={rec.officeDistanceM != null ? `${t('attendance.checkinLabel')} · ${formatDistanceKm(rec.officeDistanceM)}` : undefined}
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
+                        rec.isInOffice ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                      }`}
+                    >
+                      IN: {rec.isInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}
+                      {rec.officeDistanceM != null && ` (${formatDistanceKm(rec.officeDistanceM)})`}
+                    </span>
+                  )}
+                  {rec.checkoutTime && rec.checkoutLat != null && (
+                    <span
+                      title={rec.checkoutOfficeDistanceM != null ? `${t('attendance.checkoutLabel')} · ${formatDistanceKm(rec.checkoutOfficeDistanceM)}` : undefined}
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
+                        rec.checkoutIsInOffice ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                      }`}
+                    >
+                      OUT: {rec.checkoutIsInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}
+                      {rec.checkoutOfficeDistanceM != null && ` (${formatDistanceKm(rec.checkoutOfficeDistanceM)})`}
                     </span>
                   )}
                 </div>

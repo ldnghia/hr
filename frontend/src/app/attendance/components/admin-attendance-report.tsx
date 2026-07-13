@@ -248,6 +248,11 @@ function buildEmployeeRows(
           correctionStatus: rec.id ? corrMap.get(rec.id) : undefined,
           isCorrected: rec.isCorrected,
           isInOffice: rec.isInOffice,
+          officeDistanceM: rec.officeDistanceM,
+          hasCheckinGps: rec.checkinLat != null,
+          checkoutIsInOffice: rec.checkoutIsInOffice,
+          checkoutOfficeDistanceM: rec.checkoutOfficeDistanceM,
+          hasCheckoutGps: rec.checkoutLat != null,
           checkinNote: rec.checkinNote ?? null,
           checkoutNote: rec.checkoutNote ?? null,
           locationNote: rec.locationNote ?? null,
@@ -353,6 +358,12 @@ function buildEmployeeRows(
             hasNoCheckout: !!r.checkinTime && !r.checkoutTime,
             attendanceId: r.id,
             correctionStatus: r.id ? corrMap.get(r.id) : undefined,
+            isInOffice: r.isInOffice,
+            officeDistanceM: r.officeDistanceM,
+            hasCheckinGps: r.checkinLat != null,
+            checkoutIsInOffice: r.checkoutIsInOffice,
+            checkoutOfficeDistanceM: r.checkoutOfficeDistanceM,
+            hasCheckoutGps: r.checkoutLat != null,
           };
         });
 

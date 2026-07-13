@@ -1,5 +1,7 @@
 /** Shared types for the admin attendance report (monthly grid + detail view) */
 
+export { formatDistanceKm as fmtDistanceKm } from '@/utils/format';
+
 export type CellStatus =
   | 'ok' | 'late' | 'early' | 'ot'
   | 'annual' | 'unpaid' | 'special'
@@ -60,6 +62,12 @@ export interface ShiftEntry {
   attendanceId?: number;
   correctionStatus?: CorrectionStatus;
   isHalfDay?: boolean;
+  isInOffice?: boolean;
+  officeDistanceM?: number;
+  hasCheckinGps?: boolean;
+  checkoutIsInOffice?: boolean;
+  checkoutOfficeDistanceM?: number;
+  hasCheckoutGps?: boolean;
 }
 
 export interface DayCell {
@@ -87,6 +95,11 @@ export interface DayCell {
   correctionStatus?: CorrectionStatus;
   isCorrected?: boolean;
   isInOffice?: boolean;
+  officeDistanceM?: number;
+  hasCheckinGps?: boolean;
+  checkoutIsInOffice?: boolean;
+  checkoutOfficeDistanceM?: number;
+  hasCheckoutGps?: boolean;
   // Leave info
   leaveType?: string;
   isHalfDay?: boolean;

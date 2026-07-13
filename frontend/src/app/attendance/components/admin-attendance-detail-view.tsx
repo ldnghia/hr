@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   type EmployeeRow, type DayCell, type CellStatus,
   STATUS_META,
-  isoDateStr, countWorkingDays,
+  isoDateStr, countWorkingDays, fmtDistanceKm,
 } from './admin-attendance-report-types';
 
 // ─── Colour tokens ────────────────────────────────────────────────────────────
@@ -60,8 +60,25 @@ function SecondaryBadges({ cell }: { cell: DayCell }) {
   if (cell.isCorrected || cell.correctionStatus === 'approved')
     items.push({ label: 'Đã điều chỉnh', bg: 'oklch(71% 0.10 295 / 0.15)', color: 'oklch(46% 0.14 295)' });
 
-  if (cell.isInOffice === true)
-    items.push({ label: 'Trong VP', bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(44% 0.16 152)' });
+  // Gate on hasCheckinGps/hasCheckoutGps (was GPS captured at all) rather than
+  // isInOffice (boolean, defaults false with no "unknown" state) or officeDistanceM
+  // (only set when the employee has a personal office assigned — most orgs rely on
+  // branch/geofence validation instead, so officeDistanceM is null even for valid data).
+  if (cell.hasCheckinGps) {
+    const dist = cell.officeDistanceM != null ? ` (${fmtDistanceKm(cell.officeDistanceM)})` : '';
+    if (cell.isInOffice)
+      items.push({ label: `Vào: Trong VP${dist}`, bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(44% 0.16 152)' });
+    else
+      items.push({ label: `Vào: Ngoài VP${dist}`, bg: 'oklch(52% 0.22 18 / 0.12)', color: 'oklch(52% 0.22 18)' });
+  }
+
+  if (cell.checkoutTime && cell.hasCheckoutGps) {
+    const dist = cell.checkoutOfficeDistanceM != null ? ` (${fmtDistanceKm(cell.checkoutOfficeDistanceM)})` : '';
+    if (cell.checkoutIsInOffice)
+      items.push({ label: `Ra: Trong VP${dist}`, bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(44% 0.16 152)' });
+    else
+      items.push({ label: `Ra: Ngoài VP${dist}`, bg: 'oklch(52% 0.22 18 / 0.12)', color: 'oklch(52% 0.22 18)' });
+  }
 
   if (items.length === 0) return null;
   return (
@@ -336,6 +353,26 @@ function DailyLog({ cells, month, todayDay, isAdmin, onDeleteRequest }: {
                           style={{ background: C.early.bg, color: C.early.color }}>Về sớm</span>
                       </div>
                     )}
+                    {shift.hasCheckinGps && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          style={shift.isInOffice
+                            ? { background: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' }
+                            : { background: 'oklch(52% 0.22 18 / 0.12)', color: 'oklch(52% 0.22 18)' }}>
+                          Vào: {shift.isInOffice ? 'Trong VP' : 'Ngoài VP'}{shift.officeDistanceM != null ? ` (${fmtDistanceKm(shift.officeDistanceM)})` : ''}
+                        </span>
+                      </div>
+                    )}
+                    {shift.checkoutTime && shift.hasCheckoutGps && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          style={shift.checkoutIsInOffice
+                            ? { background: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' }
+                            : { background: 'oklch(52% 0.22 18 / 0.12)', color: 'oklch(52% 0.22 18)' }}>
+                          Ra: {shift.checkoutIsInOffice ? 'Trong VP' : 'Ngoài VP'}{shift.checkoutOfficeDistanceM != null ? ` (${fmtDistanceKm(shift.checkoutOfficeDistanceM)})` : ''}
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className={tdBase}><CellCheckin time={shift.checkinTime} /></td>
                   <td className={tdBase}><CellCheckin time={shift.checkoutTime} /></td>
@@ -416,14 +453,14 @@ function DailyLog({ cells, month, todayDay, isAdmin, onDeleteRequest }: {
                     );
                   })()}
                 </td>
+                <td className={tdBase}>
+                  <CellCorrection status={cell.correctionStatus} />
+                </td>
                 {isAdmin && (
                   <td className={tdBase}>
                     <DeleteBtn id={cell.attendanceId} dateStr={dateStr} onDeleteRequest={onDeleteRequest} />
                   </td>
                 )}
-                <td className={tdBase}>
-                  <CellCorrection status={cell.correctionStatus} />
-                </td>
               </tr>
             );
           })}
@@ -495,6 +532,18 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, workingM
     return s + (insuff ? 1 : 0);
   }, 0);
 
+  // Office location totals — mirrors shift-vs-cell fallback used above (prefer per-shift
+  // entries when present, else the cell-level fields), gated on hasCheckinGps/hasCheckoutGps
+  // so days without any GPS data are excluded rather than miscounted as "outside".
+  const officeStats = row.cells.reduce((acc, c) => {
+    const items = c.shifts && c.shifts.length > 0 ? c.shifts : [c];
+    items.forEach((it) => {
+      if (it.hasCheckinGps) { if (it.isInOffice) acc.checkinIn++; else acc.checkinOut++; }
+      if (it.checkoutTime && it.hasCheckoutGps) { if (it.checkoutIsInOffice) acc.checkoutIn++; else acc.checkoutOut++; }
+    });
+    return acc;
+  }, { checkinIn: 0, checkinOut: 0, checkoutIn: 0, checkoutOut: 0 });
+
   return (
     <div className="space-y-4 animate-[fadeUp_.25s_ease_both]">
       {deleteTarget && (
@@ -511,7 +560,18 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, workingM
           <span className="text-[13.5px] font-semibold text-gray-800">
             Tổng quan {MONTH_VI[month - 1]} {year}
           </span>
-          <span className="text-[11.5px] text-gray-400">{workingDays} ngày công chuẩn</span>
+          <div className="flex items-center gap-2">
+            {(officeStats.checkinOut + officeStats.checkoutOut) > 0 && (
+              <span
+                title={`${officeStats.checkinOut} lần vào ngoài VP · ${officeStats.checkoutOut} lần ra ngoài VP`}
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                style={{ background: 'oklch(52% 0.22 18 / 0.12)', color: 'oklch(52% 0.22 18)' }}
+              >
+                Ngoài VP: {officeStats.checkinOut} vào · {officeStats.checkoutOut} ra
+              </span>
+            )}
+            <span className="text-[11.5px] text-gray-400">{workingDays} ngày công chuẩn</span>
+          </div>
         </div>
         {isFixed ? (
           /* FIXED schedule: 8 cards, 4 per row */
@@ -576,6 +636,21 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, workingM
         )}
       </div>
 
+      {/* Daily log */}
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+          <span className="text-[13.5px] font-semibold text-gray-800">Nhật ký chấm công từng ngày</span>
+          <span className="text-[11.5px] text-gray-400">{row.cells.length} ngày trong tháng</span>
+        </div>
+        <DailyLog
+          cells={row.cells}
+          month={month}
+          todayDay={todayDay}
+          isAdmin={isAdmin}
+          onDeleteRequest={setDeleteTarget}
+        />
+      </div>
+
       {/* Calendar + (future: payroll) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -609,21 +684,6 @@ export function AdminAttendanceDetailView({ row, year, month, todayDay, workingM
               ))}
           </div>
         </div>
-      </div>
-
-      {/* Daily log */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-          <span className="text-[13.5px] font-semibold text-gray-800">Nhật ký chấm công từng ngày</span>
-          <span className="text-[11.5px] text-gray-400">{row.cells.length} ngày trong tháng</span>
-        </div>
-        <DailyLog
-          cells={row.cells}
-          month={month}
-          todayDay={todayDay}
-          isAdmin={isAdmin}
-          onDeleteRequest={setDeleteTarget}
-        />
       </div>
     </div>
   );

@@ -11,8 +11,9 @@ import {
   HttpCode,
   HttpStatus,
   Res,
+  Req,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { AttendanceService } from './attendance.service';
 import { AttendanceProcessorService } from './attendance-processor.service';
@@ -65,8 +66,8 @@ export class AttendanceController {
       'Marks late if after grace period. Creates an AttendanceLog entry.',
   })
   @ApiResponse({ status: 200, description: 'Check-in successful; returns Attendance + shift info' })
-  checkIn(@Body() dto: CheckInDto, @CurrentUser('id') employeeId: number) {
-    return this.attendanceService.checkIn(employeeId, dto);
+  checkIn(@Body() dto: CheckInDto, @CurrentUser('id') employeeId: number, @Req() req: Request) {
+    return this.attendanceService.checkIn(employeeId, dto, req.ip);
   }
 
   // ── POST /attendance/check-out ────────────────────────────────────────────
@@ -81,8 +82,8 @@ export class AttendanceController {
   })
   @ApiResponse({ status: 200, description: 'Check-out successful; returns updated Attendance' })
   @ApiResponse({ status: 400, description: 'Multiple open sessions — shiftId required' })
-  checkOut(@Body() dto: CheckOutDto, @CurrentUser('id') employeeId: number) {
-    return this.attendanceService.checkOut(employeeId, dto);
+  checkOut(@Body() dto: CheckOutDto, @CurrentUser('id') employeeId: number, @Req() req: Request) {
+    return this.attendanceService.checkOut(employeeId, dto, req.ip);
   }
 
   // ── GET /attendance/today ─────────────────────────────────────────────────

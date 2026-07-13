@@ -231,8 +231,10 @@ export interface AttendanceRecord {
   checkoutLat?: number;
   checkoutLng?: number;
   officeDistanceM?: number;
+  checkoutOfficeDistanceM?: number;
   // Location integration
   isInOffice?: boolean;
+  checkoutIsInOffice?: boolean;
   checkinNote?: string | null;
   checkoutNote?: string | null;
   locationNote?: string | null;

@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as session from 'express-session';
@@ -18,7 +19,11 @@ function getLanIP(): string {
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Trust the reverse proxy (Next.js) so req.ip resolves the real client IP
+  // from X-Forwarded-For instead of the proxy's own address.
+  app.set('trust proxy', true);
 
   // Global prefix
   app.setGlobalPrefix('api/v1');

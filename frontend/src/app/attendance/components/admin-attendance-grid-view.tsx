@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import {
   type EmployeeRow, type DayCell, type CellStatus,
-  STATUS_META, initials, avatarGradient,
+  STATUS_META, initials, avatarGradient, fmtDistanceKm,
 } from './admin-attendance-report-types';
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
@@ -82,8 +82,20 @@ function Tooltip({ data }: { data: TooltipData }) {
           flags.push({ label: 'Về sớm',        bg: 'oklch(54% 0.13 245 / 0.15)', color: 'oklch(40% 0.13 245)' });
         if (cell.isCorrected || cell.correctionStatus === 'approved')
           flags.push({ label: 'Đã điều chỉnh', bg: 'oklch(71% 0.10 295 / 0.18)', color: 'oklch(42% 0.14 295)' });
-        if (cell.isInOffice === true)
-          flags.push({ label: 'Trong VP',      bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' });
+        if (cell.hasCheckinGps) {
+          const dist = cell.officeDistanceM != null ? ` (${fmtDistanceKm(cell.officeDistanceM)})` : '';
+          if (cell.isInOffice)
+            flags.push({ label: `Vào: Trong VP${dist}`, bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' });
+          else
+            flags.push({ label: `Vào: Ngoài VP${dist}`, bg: 'oklch(52% 0.22 18 / 0.12)',  color: 'oklch(52% 0.22 18)'  });
+        }
+        if (cell.checkoutTime && cell.hasCheckoutGps) {
+          const dist = cell.checkoutOfficeDistanceM != null ? ` (${fmtDistanceKm(cell.checkoutOfficeDistanceM)})` : '';
+          if (cell.checkoutIsInOffice)
+            flags.push({ label: `Ra: Trong VP${dist}`,  bg: 'oklch(54% 0.16 152 / 0.15)', color: 'oklch(40% 0.16 152)' });
+          else
+            flags.push({ label: `Ra: Ngoài VP${dist}`,  bg: 'oklch(52% 0.22 18 / 0.12)',  color: 'oklch(52% 0.22 18)'  });
+        }
         if (flags.length === 0) return null;
         return (
           <div className="mt-1.5 flex flex-wrap gap-1">
