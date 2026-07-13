@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { AttendanceCorrectionService } from './attendance-correction.service';
 import { CreateCorrectionDto } from './dto/create-correction.dto';
+import { UpdateCorrectionDto } from './dto/update-correction.dto';
 import { ApproveCorrectionDto, RejectCorrectionDto } from './dto/review-correction.dto';
 import { AdminEditAttendanceDto } from './dto/admin-edit-attendance.dto';
 import { ListCorrectionQueryDto } from './dto/list-correction-query.dto';
@@ -57,6 +58,19 @@ export class AttendanceCorrectionController {
     @CurrentUser('role') role: string,
   ) {
     return this.service.getById(id, requesterId, role);
+  }
+
+  // PATCH /attendance-correction/:id
+  @Patch('attendance-correction/:id')
+  @ApiParam({ name: 'id', type: Number })
+  @ApiOperation({ summary: 'Edit a pending correction request (owner or admin/hr)' })
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateCorrectionDto,
+    @CurrentUser('id') requesterId: number,
+    @CurrentUser('role') role: string,
+  ) {
+    return this.service.update(id, dto, requesterId, role);
   }
 
   // POST /attendance-correction/:id/approve

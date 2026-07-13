@@ -8,6 +8,11 @@ export class ListCorrectionQueryDto {
   @IsString()
   status?: string;
 
+  @ApiPropertyOptional({ description: 'Search by reason or employee name/code' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)

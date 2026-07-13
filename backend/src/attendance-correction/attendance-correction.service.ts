@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AttendanceCorrectionLimitService } from './attendance-correction-limit.service';
 import { CreateCorrectionDto } from './dto/create-correction.dto';
+import { UpdateCorrectionDto } from './dto/update-correction.dto';
 import { AdminEditAttendanceDto } from './dto/admin-edit-attendance.dto';
 import { ListCorrectionQueryDto } from './dto/list-correction-query.dto';
 import { ApproveCorrectionDto, RejectCorrectionDto } from './dto/review-correction.dto';
@@ -194,6 +195,33 @@ export class AttendanceCorrectionService {
     });
   }
 
+  // ── Update (owner or admin/hr, pending only) ──────────────────────────────
+
+  async update(id: number, dto: UpdateCorrectionDto, requesterId: number, role: string) {
+    const req = await this.prisma.attendanceCorrectionRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Correction request not found');
+
+    const isAdminOrHr = role === 'admin' || role === 'hr';
+    if (!isAdminOrHr && req.employeeId !== requesterId)
+      throw new ForbiddenException('Not your request');
+    if (req.status !== CORRECTION_STATUS.PENDING)
+      throw new BadRequestException('Only pending requests can be edited');
+
+    const updated = await this.prisma.attendanceCorrectionRequest.update({
+      where: { id },
+      data: {
+        ...(dto.requestedCheckinTime !== undefined && { requestedCheckinTime: new Date(dto.requestedCheckinTime) }),
+        ...(dto.requestedCheckoutTime !== undefined && { requestedCheckoutTime: new Date(dto.requestedCheckoutTime) }),
+        ...(dto.requestedCheckinNote !== undefined && { requestedCheckinNote: dto.requestedCheckinNote }),
+        ...(dto.requestedCheckoutNote !== undefined && { requestedCheckoutNote: dto.requestedCheckoutNote }),
+        ...(dto.requestedShiftId !== undefined && { requestedShiftId: dto.requestedShiftId }),
+        ...(dto.reason !== undefined && { reason: dto.reason }),
+      },
+    });
+
+    return { data: updated, message: 'Correction request updated', statusCode: 200 };
+  }
+
   // ── Cancel (owner) ─────────────────────────────────────────────────────────
 
   async cancel(id: number, employeeId: number) {
@@ -271,7 +299,7 @@ export class AttendanceCorrectionService {
   // ── List ───────────────────────────────────────────────────────────────────
 
   async list(query: ListCorrectionQueryDto, requesterId: number, role: string) {
-    const { page = 1, limit = 20, status, employeeId, from, to } = query;
+    const { page = 1, limit = 20, status, employeeId, from, to, search } = query;
     const isAdminOrHr = role === 'admin' || role === 'hr';
 
     const where: Record<string, unknown> = {};
@@ -283,6 +311,13 @@ export class AttendanceCorrectionService {
         ...(from ? { gte: new Date(from) } : {}),
         ...(to ? { lte: new Date(to) } : {}),
       };
+    }
+    if (search) {
+      where['OR'] = [
+        { reason: { contains: search, mode: 'insensitive' } },
+        { employee: { fullName: { contains: search, mode: 'insensitive' } } },
+        { employee: { code: { contains: search, mode: 'insensitive' } } },
+      ];
     }
 
     const [total, items] = await Promise.all([
