@@ -92,7 +92,7 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
-  const port = parseInt(process.env.PORT ?? '3000', 10);
+  const port = parseInt(process.env.PORT ?? '3001', 10);
   const lanIP = getLanIP();
 
   app.enableShutdownHooks();
@@ -100,7 +100,7 @@ async function bootstrap() {
 
   logger.log(`🚀 Local:   http://localhost:${port}/api/v1`);
   logger.log(`🌐 Network: http://${lanIP}:${port}/api/v1`);
-  logger.log(`🌍 Domain:  http://dcorp.vn:3000 → proxied via Next.js`);
+  logger.log(`🌍 Domain:  http://dcorp.vn:3000 → proxied via Next.js (frontend:3000 → backend:${port})`);
   logger.log(`📚 Swagger: http://localhost:${port}/api/docs`);
 
   // Signal PM2 cluster mode that this instance is ready to receive traffic
