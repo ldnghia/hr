@@ -14,6 +14,7 @@ import { GpsCheckInPanel } from './components/gps-check-in-panel';
 import { TodaySessionsList } from './components/today-sessions-list';
 import { DailySummaryCard } from './components/daily-summary-card';
 import { CheckoutShiftPickerModal } from './components/checkout-shift-picker-modal';
+import { LateEarlyReasonModal } from './components/late-early-reason-modal';
 import { LocationReasonBox } from './components/location-reason-box';
 import { MyAttendanceHistory } from './components/my-attendance-history';
 import { CorrectionRequestList } from './components/correction-request-list';
@@ -115,6 +116,7 @@ export default function AttendancePage() {
     pickerOpen, pickerSessions, setPickerOpen,
     handleCheckIn, handleCheckOut, handlePickerSelect,
     guardReason,
+    reasonModal, setReasonModalValue, confirmReasonModal, cancelReasonModal,
   } = useCheckinCheckout({
     geo,
     needsReason,
@@ -127,6 +129,8 @@ export default function AttendancePage() {
     setConfirmedBranch,
     setLocationSource,
     refetchSessions: refetchSessionsAndHistory,
+    shifts,
+    sessions,
   });
 
   // Mark unclosed sessions as "forgot checkout" — leaves checkoutTime empty
@@ -223,6 +227,17 @@ export default function AttendancePage() {
         open={pickerOpen} openSessions={pickerSessions}
         loading={loadingShiftId !== null}
         onSelect={handlePickerSelect} onClose={() => setPickerOpen(false)}
+      />
+
+      <LateEarlyReasonModal
+        open={reasonModal.open}
+        kind={reasonModal.kind}
+        value={reasonModal.value}
+        error={reasonModal.error}
+        loading={loadingShiftId !== null}
+        onChange={setReasonModalValue}
+        onConfirm={confirmReasonModal}
+        onCancel={cancelReasonModal}
       />
     </AppShell>
   );

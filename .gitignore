@@ -19,6 +19,7 @@ build/
 # Logs
 *.log
 npm-debug.log*
+be-log.txt
 
 # OS
 .DS_Store

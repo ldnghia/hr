@@ -238,6 +238,8 @@ export interface AttendanceRecord {
   checkinNote?: string | null;
   checkoutNote?: string | null;
   locationNote?: string | null;
+  lateReason?: string | null;
+  earlyReason?: string | null;
   // Leave integration
   isOnLeave?: boolean;
   leaveRequestId?: number | null;
@@ -425,6 +427,10 @@ export interface MonthlyShift {
   shiftName: string;
   startTime: string;
   endTime: string;
+  graceLateMinutes: number;
+  graceEarlyMinutes: number;
+  isCrossDay: boolean;
+  breakMinutes: number;
 }
 
 /** Aggregated daily totals from GET /attendance/daily-summary */

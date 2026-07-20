@@ -86,10 +86,12 @@ export function MyAttendanceHistory({ isAdminOrHr, onAdminEditSuccess, refreshKe
                   </div>
                 </div>
                 <WfmBadges record={rec} />
-                {(rec.checkinNote || rec.checkoutNote) && (
+                {(rec.checkinNote || rec.checkoutNote || rec.lateReason || rec.earlyReason) && (
                   <div className="space-y-1 text-[11px] text-gray-500">
                     {rec.checkinNote && <p className="bg-gray-50 rounded px-2 py-1"><span className="font-semibold text-gray-400">IN:</span> {rec.checkinNote}</p>}
                     {rec.checkoutNote && <p className="bg-gray-50 rounded px-2 py-1"><span className="font-semibold text-gray-400">OUT:</span> {rec.checkoutNote}</p>}
+                    {rec.lateReason && <p className="bg-red-50 rounded px-2 py-1"><span className="font-semibold text-red-400">Trễ:</span> {rec.lateReason}</p>}
+                    {rec.earlyReason && <p className="bg-blue-50 rounded px-2 py-1"><span className="font-semibold text-blue-400">Sớm:</span> {rec.earlyReason}</p>}
                   </div>
                 )}
               </div>

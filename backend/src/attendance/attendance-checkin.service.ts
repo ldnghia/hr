@@ -155,6 +155,12 @@ export class AttendanceCheckinService {
     // 8. Compute late flag
     const { isLate } = computeSessionFlags(ts, null, shift);
 
+    // 8b. Reason guard — required when check-in is beyond shift grace-late window
+    const lateReason = dto.lateReason?.trim();
+    if (isLate && !lateReason) {
+      throw new BadRequestException('Vui lòng nhập lý do đi trễ (reason required for late check-in)');
+    }
+
     const unknownDeviceNote = isUnknownDevice ? '[THIẾT BỊ CHƯA ĐĂNG KÝ] ' : '';
 
     // 9. Create/restore attendance row (composite key: employeeId + date + shiftId)
@@ -163,6 +169,7 @@ export class AttendanceCheckinService {
     const checkinData = {
       checkinTime: ts,
       isLate,
+      lateReason,
       checkinLat: dto.lat,
       checkinLng: dto.lng,
       officeDistanceM,
@@ -206,6 +213,7 @@ export class AttendanceCheckinService {
         isInOffice,
         officeDistanceM,
         note: locationNote,
+        reason: lateReason,
         attendanceId: attendance.id,
       },
     });
@@ -355,6 +363,12 @@ export class AttendanceCheckinService {
       shift as any, // shift is included via relation
     );
 
+    // Reason guard — required when check-out is beyond shift grace-early window
+    const earlyReason = dto.earlyReason?.trim();
+    if (isEarlyOut && !earlyReason) {
+      throw new BadRequestException('Vui lòng nhập lý do về sớm (reason required for early check-out)');
+    }
+
     const checkoutUnknownNote = isUnknownDeviceOut ? '[THIẾT BỊ CHƯA ĐĂNG KÝ] ' : '';
     const updated = await this.prisma.attendance.update({
       where: { id: target.id },
@@ -362,6 +376,7 @@ export class AttendanceCheckinService {
         checkoutTime: ts,
         workingHours,
         isEarlyOut,
+        earlyReason,
         isOvertime,
         overtimeHours,
         checkoutLat: dto.lat,
@@ -386,6 +401,7 @@ export class AttendanceCheckinService {
         isInOffice,
         officeDistanceM: checkoutOfficeDistanceM,
         note: locationNote,
+        reason: earlyReason,
         attendanceId: target.id,
       },
     });

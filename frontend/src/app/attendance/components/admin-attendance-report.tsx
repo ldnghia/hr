@@ -19,6 +19,7 @@ import { AdminAttendanceKpiStrip } from './admin-attendance-kpi-strip';
 import { AdminAttendanceGridView } from './admin-attendance-grid-view';
 import { AdminAttendanceCcGridView } from './admin-attendance-cc-grid-view';
 import { AdminAttendanceDetailView } from './admin-attendance-detail-view';
+import { exportEmployeeDailyLogExcel } from './admin-attendance-detail-export';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,43 @@ function calcNormalHours(shift?: { startTime?: string; endTime?: string; breakMi
   let spanMin = eh * 60 + em - (sh * 60 + sm);
   if (spanMin <= 0) spanMin += 1440; // cross-day shift
   return Math.max(0, parseFloat(((spanMin - (shift.breakMinutes ?? 0)) / 60).toFixed(2)));
+}
+
+/**
+ * Late/early minutes from raw check-in/check-out clock time vs shift start/end.
+ * Anchors the expected start/end to the actual checkin/checkout calendar date instead of
+ * doing hour-of-day arithmetic, so cross-day shifts (e.g. 14:00–00:30) don't produce a huge
+ * bogus "early" number when checkout lands after midnight (naive minute-of-day diff would
+ * compare 00:24 against 23:00 as if both were the same day).
+ */
+function calcLateEarlyMinutes(
+  ci: Date | null,
+  co: Date | null,
+  shift?: { startTime?: string; endTime?: string; isCrossDay?: boolean } | null,
+): { late: number; early: number } {
+  let late = 0;
+  let early = 0;
+  if (!shift?.startTime) return { late, early };
+
+  const [sh, sm] = shift.startTime.split(':').map(Number);
+  let expectedStart: Date | null = null;
+  if (ci) {
+    expectedStart = new Date(ci);
+    expectedStart.setHours(sh, sm, 0, 0);
+    late = Math.max(0, Math.round((ci.getTime() - expectedStart.getTime()) / 60_000));
+  }
+
+  if (co && shift.endTime) {
+    const [eh, em] = shift.endTime.split(':').map(Number);
+    const expectedEnd = new Date(expectedStart ?? co);
+    expectedEnd.setHours(eh, em, 0, 0);
+    if (shift.isCrossDay && expectedEnd.getTime() <= (expectedStart ?? expectedEnd).getTime()) {
+      expectedEnd.setDate(expectedEnd.getDate() + 1);
+    }
+    early = Math.max(0, Math.round((expectedEnd.getTime() - co.getTime()) / 60_000));
+  }
+
+  return { late, early };
 }
 
 interface ApprovedLeave {
@@ -219,21 +257,9 @@ function buildEmployeeRows(
         }
         status = deriveCellStatus(rec);
         // Calculate late/early from timestamps
-        let lateMinutes = 0;
         const co = rec.checkoutTime ? new Date(rec.checkoutTime) : null;
         const ci = rec.checkinTime ? new Date(rec.checkinTime) : null;
-
-        if (ci && rec.shift?.startTime) {
-          const [sh, sm] = rec.shift.startTime.split(':').map(Number);
-          const grace = rec.shift.graceLateMinutes ?? 0;
-          lateMinutes = Math.max(0, ci.getHours() * 60 + ci.getMinutes() - (sh * 60 + sm) - grace);
-        }
-        let earlyMinutes = 0;
-        if (co && rec.shift?.endTime) {
-          const [eh, em] = rec.shift.endTime.split(':').map(Number);
-          const grace = rec.shift.graceEarlyMinutes ?? 0;
-          earlyMinutes = Math.max(0, eh * 60 + em - (co.getHours() * 60 + co.getMinutes()) - grace);
-        }
+        const { late: lateMinutes, early: earlyMinutes } = calcLateEarlyMinutes(ci, co, rec.shift);
 
         const otH = rec.overtimeHours ? parseFloat(String(rec.overtimeHours)) : 0;
         cell = {
@@ -256,6 +282,8 @@ function buildEmployeeRows(
           checkinNote: rec.checkinNote ?? null,
           checkoutNote: rec.checkoutNote ?? null,
           locationNote: rec.locationNote ?? null,
+          lateReason: rec.lateReason ?? null,
+          earlyReason: rec.earlyReason ?? null,
           correctionReason: rec.corrections?.[0]?.reason ?? null,
           correctionReviewNote: rec.corrections?.[0]?.reviewNote ?? null,
           // Overlay half-day leave info even when employee actually checked in
@@ -328,16 +356,7 @@ function buildEmployeeRows(
           const s = deriveCellStatus(r);
           const ci = r.checkinTime ? new Date(r.checkinTime) : null;
           const co = r.checkoutTime ? new Date(r.checkoutTime) : null;
-          let late = 0;
-          if (ci && r.shift?.startTime) {
-            const [sh, sm] = r.shift.startTime.split(':').map(Number);
-            late = Math.max(0, ci.getHours() * 60 + ci.getMinutes() - (sh * 60 + sm));
-          }
-          let early = 0;
-          if (co && r.shift?.endTime) {
-            const [eh, em] = r.shift.endTime.split(':').map(Number);
-            early = Math.max(0, eh * 60 + em - (co.getHours() * 60 + co.getMinutes()));
-          }
+          const { late, early } = calcLateEarlyMinutes(ci, co, r.shift);
           return {
             shiftCode: deriveShiftCode(r.shift),
             shiftName: r.shift?.name,
@@ -364,6 +383,10 @@ function buildEmployeeRows(
             checkoutIsInOffice: r.checkoutIsInOffice,
             checkoutOfficeDistanceM: r.checkoutOfficeDistanceM,
             hasCheckoutGps: r.checkoutLat != null,
+            checkinNote: r.checkinNote ?? null,
+            checkoutNote: r.checkoutNote ?? null,
+            lateReason: r.lateReason ?? null,
+            earlyReason: r.earlyReason ?? null,
           };
         });
 
@@ -722,6 +745,10 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
           {user?.role === 'admin' && (
             <button
               onClick={async () => {
+                if (detailEmpId && detailRow) {
+                  try { await exportEmployeeDailyLogExcel(detailRow, year, month); } catch { /* non-critical */ }
+                  return;
+                }
                 const dateFrom = isoDateStr(year, month, 1);
                 const dateTo   = isoDateStr(year, month, new Date(year, month, 0).getDate());
                 try {

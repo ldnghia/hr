@@ -42,4 +42,12 @@ export class CheckInDto {
   @IsOptional()
   @IsISO8601()
   timestamp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Reason for late check-in (required when check-in is beyond shift grace-late window)',
+    example: 'Kẹt xe trên đường đi làm',
+  })
+  @IsOptional()
+  @IsString()
+  lateReason?: string;
 }

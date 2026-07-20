@@ -51,10 +51,13 @@ function StatusBadge({ status }: { status: CellStatus }) {
 function SecondaryBadges({ cell }: { cell: DayCell }) {
   const items: { label: string; bg: string; color: string }[] = [];
 
-  if ((cell.lateMinutes ?? 0) > 0)
+  // lateMinutes/earlyMinutes are a raw diff with no grace period, while cell.status.late/early
+  // come from the backend's tolerance-aware isLate/isEarlyOut — status 'ok'/'ot' means within
+  // tolerance, so skip the pill then even if the raw minute diff is > 0.
+  if ((cell.lateMinutes ?? 0) > 0 && cell.status !== 'ok' && cell.status !== 'ot')
     items.push({ label: 'Đi muộn', bg: 'oklch(58% 0.20 28 / 0.12)', color: 'oklch(48% 0.20 28)' });
 
-  if ((cell.earlyMinutes ?? 0) > 0)
+  if ((cell.earlyMinutes ?? 0) > 0 && cell.status !== 'ok' && cell.status !== 'ot')
     items.push({ label: 'Về sớm', bg: 'oklch(54% 0.13 245 / 0.12)', color: 'oklch(44% 0.13 245)' });
 
   if (cell.isCorrected || cell.correctionStatus === 'approved')
@@ -340,14 +343,17 @@ function DailyLog({ cells, month, todayDay, isAdmin, onDeleteRequest }: {
                         </span>
                       </div>
                     )}
-                    {/* Show secondary pill only when status badge doesn't already convey it */}
-                    {(shift.lateMinutes ?? 0) > 0 && shift.status !== 'late' && (
+                    {/* Show secondary pill only when status badge doesn't already convey it. lateMinutes/
+                        earlyMinutes are a raw diff with no grace period, while status.late/early come from
+                        the backend's tolerance-aware isLate/isEarlyOut — status 'ok'/'ot' means within
+                        tolerance, so skip the pill then even if the raw minute diff is > 0. */}
+                    {(shift.lateMinutes ?? 0) > 0 && shift.status !== 'late' && shift.status !== 'ok' && shift.status !== 'ot' && (
                       <div className="mt-1">
                         <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
                           style={{ background: C.late.bg, color: C.late.color }}>Đi trễ</span>
                       </div>
                     )}
-                    {(shift.earlyMinutes ?? 0) > 0 && shift.status !== 'early' && (
+                    {(shift.earlyMinutes ?? 0) > 0 && shift.status !== 'early' && shift.status !== 'ok' && shift.status !== 'ot' && (
                       <div className="mt-1">
                         <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
                           style={{ background: C.early.bg, color: C.early.color }}>Về sớm</span>
@@ -380,7 +386,24 @@ function DailyLog({ cells, month, todayDay, isAdmin, onDeleteRequest }: {
                   <td className={tdBase}><CellMinutes minutes={shift.lateMinutes} colorKey="late" /></td>
                   <td className={tdBase}><CellMinutes minutes={shift.earlyMinutes} colorKey="early" /></td>
                   <td className={`${tdBase} max-w-[180px]`}>
-                    <span className="text-gray-300">—</span>
+                    {(() => {
+                      const notes: { label: string; text: string }[] = [];
+                      if (shift.checkinNote)  notes.push({ label: 'Vào', text: shift.checkinNote });
+                      if (shift.checkoutNote) notes.push({ label: 'Ra', text: shift.checkoutNote });
+                      if (shift.lateReason)   notes.push({ label: 'Lý do trễ', text: shift.lateReason });
+                      if (shift.earlyReason)  notes.push({ label: 'Lý do sớm', text: shift.earlyReason });
+                      if (notes.length === 0) return <span className="text-gray-300">—</span>;
+                      return (
+                        <div className="space-y-0.5">
+                          {notes.map(({ label, text }, i) => (
+                            <p key={i} className="text-[11.5px] text-gray-600 leading-snug">
+                              <span className="font-semibold text-gray-400 mr-1">{label}:</span>
+                              {text}
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className={tdBase}>
                     <CellCorrection status={shift.correctionStatus} />
@@ -438,6 +461,8 @@ function DailyLog({ cells, month, todayDay, isAdmin, onDeleteRequest }: {
                     if (cell.checkinNote)          notes.push({ label: 'Vào', text: cell.checkinNote });
                     if (cell.checkoutNote)         notes.push({ label: 'Ra', text: cell.checkoutNote });
                     if (cell.locationNote)         notes.push({ label: 'Địa điểm', text: cell.locationNote });
+                    if (cell.lateReason)           notes.push({ label: 'Lý do trễ', text: cell.lateReason });
+                    if (cell.earlyReason)          notes.push({ label: 'Lý do sớm', text: cell.earlyReason });
                     if (cell.correctionReason)     notes.push({ label: 'Lý do ĐC', text: cell.correctionReason });
                     if (cell.correctionReviewNote) notes.push({ label: 'Ghi chú duyệt', text: cell.correctionReviewNote });
                     if (notes.length === 0) return <span className="text-gray-300">—</span>;

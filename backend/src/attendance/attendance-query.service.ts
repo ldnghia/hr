@@ -269,7 +269,12 @@ export class AttendanceQueryService {
         workingMode: true,
         departmentId: true,
         shiftId: true,
-        currentShift: { select: { id: true, name: true, startTime: true, endTime: true, code: true } },
+        currentShift: {
+          select: {
+            id: true, name: true, startTime: true, endTime: true, code: true,
+            graceLateMinutes: true, graceEarlyMinutes: true, isCrossDay: true, breakMinutes: true,
+          },
+        },
       },
     });
 
@@ -278,7 +283,10 @@ export class AttendanceQueryService {
     if (emp?.workingMode === 'SHIFT' && emp.departmentId) {
       const deptShifts = await this.prisma.shift.findMany({
         where: { departmentId: emp.departmentId, isActive: true },
-        select: { id: true, name: true, startTime: true, endTime: true, code: true },
+        select: {
+          id: true, name: true, startTime: true, endTime: true, code: true,
+          graceLateMinutes: true, graceEarlyMinutes: true, isCrossDay: true, breakMinutes: true,
+        },
         orderBy: { startTime: 'asc' },
       });
 
@@ -290,6 +298,10 @@ export class AttendanceQueryService {
             startTime: s.startTime,
             endTime: s.endTime,
             code: s.code,
+            graceLateMinutes: s.graceLateMinutes,
+            graceEarlyMinutes: s.graceEarlyMinutes,
+            isCrossDay: s.isCrossDay,
+            breakMinutes: s.breakMinutes,
           })),
         };
       }
@@ -299,7 +311,12 @@ export class AttendanceQueryService {
     const assignments = await this.prisma.employeeShiftAssignment.findMany({
       where: { employeeId, year, month },
       include: {
-        shift: { select: { id: true, name: true, startTime: true, endTime: true, code: true } },
+        shift: {
+          select: {
+            id: true, name: true, startTime: true, endTime: true, code: true,
+            graceLateMinutes: true, graceEarlyMinutes: true, isCrossDay: true, breakMinutes: true,
+          },
+        },
       },
       orderBy: { shiftId: 'asc' },
     });
@@ -312,6 +329,10 @@ export class AttendanceQueryService {
           startTime: a.shift.startTime,
           endTime: a.shift.endTime,
           code: a.shift.code,
+          graceLateMinutes: a.shift.graceLateMinutes,
+          graceEarlyMinutes: a.shift.graceEarlyMinutes,
+          isCrossDay: a.shift.isCrossDay,
+          breakMinutes: a.shift.breakMinutes,
         })),
       };
     }
@@ -322,7 +343,10 @@ export class AttendanceQueryService {
       emp?.currentShift ??
       (await this.prisma.shift.findFirst({
         where: { isDefault: true, isActive: true },
-        select: { id: true, name: true, startTime: true, endTime: true, code: true },
+        select: {
+          id: true, name: true, startTime: true, endTime: true, code: true,
+          graceLateMinutes: true, graceEarlyMinutes: true, isCrossDay: true, breakMinutes: true,
+        },
       }));
 
     if (!defaultShift) return { data: [] };
@@ -334,6 +358,10 @@ export class AttendanceQueryService {
         startTime: defaultShift.startTime,
         endTime: defaultShift.endTime,
         code: defaultShift.code,
+        graceLateMinutes: defaultShift.graceLateMinutes,
+        graceEarlyMinutes: defaultShift.graceEarlyMinutes,
+        isCrossDay: defaultShift.isCrossDay,
+        breakMinutes: defaultShift.breakMinutes,
       }],
     };
   }

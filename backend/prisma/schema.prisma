@@ -314,6 +314,7 @@ model AttendanceLog {
   attendanceId Int?     @map("attendance_id")
   createdAt    DateTime @default(now()) @map("created_at")
   note         String?  @map("note")
+  reason       String?  @map("reason")
   employee     Employee @relation(fields: [employeeId], references: [id])
 
   @@map("attendance_log")
@@ -345,6 +346,8 @@ model Attendance {
   hasLocation     Boolean   @default(false) @map("has_location")
   checkinNote     String?   @map("checkin_note")
   checkoutNote    String?   @map("checkout_note")
+  lateReason      String?   @map("late_reason")
+  earlyReason     String?   @map("early_reason")
   forgotCheckout      Boolean   @default(false) @map("forgot_checkout")
   isCorrected         Boolean   @default(false) @map("is_corrected")
   correctionRequestId Int?      @unique @map("correction_request_id")

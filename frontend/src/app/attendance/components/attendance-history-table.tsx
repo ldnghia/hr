@@ -104,7 +104,9 @@ export function AttendanceHistoryTable({
                 <div className="flex flex-col gap-1 text-[10px] text-gray-500 max-w-[200px]">
                   {rec.checkinNote && <div className="bg-gray-50 p-1 rounded"><span className="font-bold text-gray-400">IN:</span> {rec.checkinNote}</div>}
                   {rec.checkoutNote && <div className="bg-gray-50 p-1 rounded"><span className="font-bold text-gray-400">OUT:</span> {rec.checkoutNote}</div>}
-                  {!rec.checkinNote && !rec.checkoutNote && (
+                  {rec.lateReason && <div className="bg-red-50 p-1 rounded"><span className="font-bold text-red-400">Trễ:</span> {rec.lateReason}</div>}
+                  {rec.earlyReason && <div className="bg-blue-50 p-1 rounded"><span className="font-bold text-blue-400">Sớm:</span> {rec.earlyReason}</div>}
+                  {!rec.checkinNote && !rec.checkoutNote && !rec.lateReason && !rec.earlyReason && (
                     <span className="text-gray-300 italic uppercase tracking-widest text-[9px]">{t('common.noData')}</span>
                   )}
                 </div>

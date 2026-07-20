@@ -68,6 +68,10 @@ export interface ShiftEntry {
   checkoutIsInOffice?: boolean;
   checkoutOfficeDistanceM?: number;
   hasCheckoutGps?: boolean;
+  checkinNote?: string | null;
+  checkoutNote?: string | null;
+  lateReason?: string | null;
+  earlyReason?: string | null;
 }
 
 export interface DayCell {
@@ -84,6 +88,8 @@ export interface DayCell {
   checkinNote?: string | null;
   checkoutNote?: string | null;
   locationNote?: string | null;
+  lateReason?: string | null;
+  earlyReason?: string | null;
   correctionReason?: string | null;   // reason from latest correction request
   correctionReviewNote?: string | null; // reviewer's note
   isHoliday?: boolean;

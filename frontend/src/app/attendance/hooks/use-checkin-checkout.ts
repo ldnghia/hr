@@ -6,6 +6,8 @@ import { attendanceService } from '@/services/attendance.service';
 import type { MultipleOpenSessionsError, NearestBranch } from '@/services/attendance.service';
 import { formatDateTime } from '@/utils/format';
 import { getDeviceFingerprint } from '@/lib/device-fingerprint';
+import { predictIsLate, predictIsEarlyOut } from '../utils/predict-late-early';
+import type { AttendanceSession, MonthlyShift } from '@/types';
 
 interface GeoState {
   lat: number | null;
@@ -25,7 +27,23 @@ interface UseCheckinCheckoutOptions {
   setConfirmedBranch: (v: NearestBranch | null) => void;
   setLocationSource: (v: 'GPS' | 'NO_LOCATION' | null) => void;
   refetchSessions: () => Promise<void>;
+  /** This month's assigned shifts — used to predict late/early client-side before submit */
+  shifts: MonthlyShift[];
+  /** Today's open sessions — used to look up checkinTime for early-out prediction */
+  sessions: AttendanceSession[];
 }
+
+interface ReasonModalState {
+  open: boolean;
+  kind: 'late' | 'early' | null;
+  value: string;
+  error: string;
+}
+
+type PendingAction =
+  | { type: 'checkin'; shiftId: number }
+  | { type: 'checkout'; shiftId: number }
+  | { type: 'picker'; shiftId: number };
 
 export interface UseCheckinCheckoutResult {
   loadingShiftId: number | null;
@@ -39,6 +57,10 @@ export interface UseCheckinCheckoutResult {
   /** Returns true if a reason isn't required or is already filled in; otherwise
    *  focuses the reason box and sets the error, without performing check-out. */
   guardReason: () => boolean;
+  reasonModal: ReasonModalState;
+  setReasonModalValue: (v: string) => void;
+  confirmReasonModal: () => Promise<void>;
+  cancelReasonModal: () => void;
 }
 
 /** Encapsulates check-in / check-out / picker logic for the attendance page. */
@@ -54,6 +76,8 @@ export function useCheckinCheckout({
   setConfirmedBranch,
   setLocationSource,
   refetchSessions,
+  shifts,
+  sessions,
 }: UseCheckinCheckoutOptions): UseCheckinCheckoutResult {
   const { t } = useTranslation();
   const [loadingShiftId, setLoadingShiftId] = useState<number | null>(null);
@@ -61,6 +85,8 @@ export function useCheckinCheckout({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSessions, setPickerSessions] = useState<MultipleOpenSessionsError['openSessions']>([]);
   const pendingRef = useRef<{ lat?: number; lng?: number; locationNote?: string }>({});
+  const [reasonModal, setReasonModal] = useState<ReasonModalState>({ open: false, kind: null, value: '', error: '' });
+  const pendingActionRef = useRef<PendingAction | null>(null);
 
   function guardReason(): boolean {
     if (needsReason && !locationNote.trim()) {
@@ -72,13 +98,15 @@ export function useCheckinCheckout({
     return true;
   }
 
-  async function gpsPayload(shiftId?: number) {
+  async function gpsPayload(shiftId?: number, lateReason?: string, earlyReason?: string) {
     const deviceId = await getDeviceFingerprint();
     return {
       lat: geo.lat ?? undefined,
       lng: geo.lng ?? undefined,
       deviceId,
       locationNote: needsReason ? locationNote.trim() : undefined,
+      lateReason,
+      earlyReason,
       // Always send shiftId so backend skips auto-detection and uses the correct shift
       ...(shiftId ? { shiftId } : {}),
     };
@@ -95,12 +123,40 @@ export function useCheckinCheckout({
     return (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback;
   }
 
-  async function handleCheckIn(shiftId: number) {
-    setActionMsg(null);
-    if (!guardReason()) return;
+  function openReasonModal(kind: 'late' | 'early', action: PendingAction) {
+    pendingActionRef.current = action;
+    setReasonModal({ open: true, kind, value: '', error: '' });
+  }
+
+  function setReasonModalValue(v: string) {
+    setReasonModal((s) => ({ ...s, value: v, error: '' }));
+  }
+
+  function cancelReasonModal() {
+    pendingActionRef.current = null;
+    setReasonModal({ open: false, kind: null, value: '', error: '' });
+  }
+
+  async function confirmReasonModal() {
+    const action = pendingActionRef.current;
+    if (!action) return;
+    if (!reasonModal.value.trim()) {
+      setReasonModal((s) => ({ ...s, error: t('attendance.pleaseEnterReason') }));
+      return;
+    }
+    const reason = reasonModal.value.trim();
+    setReasonModal({ open: false, kind: null, value: '', error: '' });
+    pendingActionRef.current = null;
+
+    if (action.type === 'checkin') await doCheckIn(action.shiftId, reason);
+    else if (action.type === 'checkout') await doCheckOut(action.shiftId, reason);
+    else await doPickerSelect(action.shiftId, reason);
+  }
+
+  async function doCheckIn(shiftId: number, lateReason?: string) {
     setLoadingShiftId(shiftId);
     try {
-      const result = await attendanceService.checkIn(await gpsPayload(shiftId));
+      const result = await attendanceService.checkIn(await gpsPayload(shiftId, lateReason));
       if (result.office) setConfirmedOffice(result.office);
       if (result.nearestBranch) setConfirmedBranch(result.nearestBranch);
       setLocationSource(result.locationSource ?? null);
@@ -118,7 +174,9 @@ export function useCheckinCheckout({
       if (msg.includes('Thiết bị chưa được đăng ký')) {
         setActionMsg({ type: 'error', text: `${msg} → Vào trang /devices để đăng ký.` });
       } else if (msg.toLowerCase().includes('reason')) {
-        setForceReason(true); setNoteError(msg);
+        // Server disagreed with the client prediction (e.g. clock skew) — reopen the modal.
+        openReasonModal('late', { type: 'checkin', shiftId });
+        setReasonModal((s) => ({ ...s, error: msg }));
       } else {
         setActionMsg({ type: 'error', text: msg });
       }
@@ -127,11 +185,9 @@ export function useCheckinCheckout({
     }
   }
 
-  async function handleCheckOut(shiftId: number) {
-    setActionMsg(null);
-    if (!guardReason()) return;
+  async function doCheckOut(shiftId: number, earlyReason?: string) {
     setLoadingShiftId(shiftId);
-    const payload = await gpsPayload(shiftId);
+    const payload = await gpsPayload(shiftId, undefined, earlyReason);
     try {
       const result = await attendanceService.checkOut(payload);
       setLocationNote(''); setForceReason(false);
@@ -147,7 +203,8 @@ export function useCheckinCheckout({
         setPickerSessions(openSessions);
         setPickerOpen(true);
       } else if (msg.toLowerCase().includes('reason')) {
-        setForceReason(true); setNoteError(msg);
+        openReasonModal('early', { type: 'checkout', shiftId });
+        setReasonModal((s) => ({ ...s, error: msg }));
       } else {
         setActionMsg({ type: 'error', text: msg });
       }
@@ -157,21 +214,59 @@ export function useCheckinCheckout({
     }
   }
 
-  async function handlePickerSelect(shiftId: number) {
+  async function doPickerSelect(shiftId: number, earlyReason?: string) {
     setPickerOpen(false);
     setLoadingShiftId(shiftId);
     try {
-      const result = await attendanceService.checkOut({ ...pendingRef.current, shiftId });
+      const result = await attendanceService.checkOut({ ...pendingRef.current, shiftId, earlyReason });
       setLocationNote(''); setForceReason(false);
       setActionMsg({ type: 'success', text: formatCheckoutMsg(result) });
       await refetchSessions();
     } catch (err) {
       const msg = extractErrMsg(err, 'Check-out failed.');
-      setActionMsg({ type: 'error', text: msg });
+      if (msg.toLowerCase().includes('reason')) {
+        openReasonModal('early', { type: 'picker', shiftId });
+        setReasonModal((s) => ({ ...s, error: msg }));
+      } else {
+        setActionMsg({ type: 'error', text: msg });
+      }
       console.error('[attendance] Picker checkout failed:', msg);
     } finally {
       setLoadingShiftId(null);
     }
+  }
+
+  async function handleCheckIn(shiftId: number) {
+    setActionMsg(null);
+    if (!guardReason()) return;
+    const shift = shifts.find((s) => s.shiftId === shiftId);
+    if (shift && predictIsLate(new Date(), shift)) {
+      openReasonModal('late', { type: 'checkin', shiftId });
+      return;
+    }
+    await doCheckIn(shiftId);
+  }
+
+  async function handleCheckOut(shiftId: number) {
+    setActionMsg(null);
+    if (!guardReason()) return;
+    const shift = shifts.find((s) => s.shiftId === shiftId);
+    const session = sessions.find((s) => s.shiftId === shiftId);
+    if (shift && session?.checkinTime && predictIsEarlyOut(new Date(session.checkinTime), new Date(), shift)) {
+      openReasonModal('early', { type: 'checkout', shiftId });
+      return;
+    }
+    await doCheckOut(shiftId);
+  }
+
+  async function handlePickerSelect(shiftId: number) {
+    const shift = shifts.find((s) => s.shiftId === shiftId);
+    const picked = pickerSessions.find((s) => s.shiftId === shiftId);
+    if (shift && picked?.checkinTime && predictIsEarlyOut(new Date(picked.checkinTime), new Date(), shift)) {
+      openReasonModal('early', { type: 'picker', shiftId });
+      return;
+    }
+    await doPickerSelect(shiftId);
   }
 
   return {
@@ -184,5 +279,9 @@ export function useCheckinCheckout({
     handleCheckOut,
     handlePickerSelect,
     guardReason,
+    reasonModal,
+    setReasonModalValue,
+    confirmReasonModal,
+    cancelReasonModal,
   };
 }

@@ -48,4 +48,12 @@ export class CheckOutDto {
   @IsOptional()
   @IsISO8601()
   timestamp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Reason for early check-out (required when check-out is beyond shift grace-early window)',
+    example: 'Xin về sớm để đón con',
+  })
+  @IsOptional()
+  @IsString()
+  earlyReason?: string;
 }

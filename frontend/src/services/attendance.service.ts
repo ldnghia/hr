@@ -36,6 +36,8 @@ export interface CheckInPayload {
   deviceId?: string;
   timestamp?: string;
   locationNote?: string;
+  /** Required when check-in is beyond shift grace-late window */
+  lateReason?: string;
 }
 
 export interface CheckOutPayload {
@@ -48,6 +50,8 @@ export interface CheckOutPayload {
   shiftId?: number;
   /** Direct record ID — used when closing unclosed sessions from previous days */
   attendanceId?: number;
+  /** Required when check-out is beyond shift grace-early window */
+  earlyReason?: string;
 }
 
 /** Error body returned by server when checkout has 2+ open sessions */

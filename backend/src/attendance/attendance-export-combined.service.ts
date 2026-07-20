@@ -13,6 +13,7 @@ import { ReportAttendanceDto } from './dto/report-attendance.dto';
 import { formatDate } from '../common/utils/format';
 import * as ExcelJS from 'exceljs';
 import { Response } from 'express';
+import { buildLateEarlySheet } from './attendance-export-late-early-sheet';
 
 const localDateStr = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -317,6 +318,7 @@ export class AttendanceExportCombinedService {
     const wb = new ExcelJS.Workbook();
     this.addGridSheet(wb, employees, days, lookup, workingMode, shiftLookup, fixedCorrectedSet);
     this.addSummarySheet(wb, summaries, start, end, officialWorkingDays, officialHolidayDays, workingMode, officeTotals);
+    buildLateEarlySheet(wb, records);
 
     const month = String(start.getMonth() + 1).padStart(2, '0');
     const year  = start.getFullYear();
