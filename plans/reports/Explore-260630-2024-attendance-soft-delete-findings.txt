@@ -1,0 +1,168 @@
+﻿================================================================================
+ATTENDANCE SOFT-DELETE AUDIT — FINDINGS SUMMARY
+================================================================================
+
+Audit Date: 2026-06-30
+Scope: F:/AI/hr_project/backend/src/
+Total Queries: 25
+Missing Filter: 11 (44%)
+Protected: 14 (56%)
+
+================================================================================
+CRITICAL — CHECKIN/CHECKOUT FLOW (7 INSTANCES)
+================================================================================
+
+File: attendance.service.ts
+Line: 50
+Method: findFirst
+Query: findFirst({ where: { employeeId, date: dateOnly } })
+Issue: Core checkin/checkout logic retrieves deleted records
+Risk: Employee cannot check in if deleted session exists
+Fix: Add deletedAt: null
+
+File: attendance-checkin.service.ts
+Line: 43
+Method: findUnique
+Query: findUnique({ where: { employeeId_date_shiftId: {...} } })
+Issue: Guard against duplicate check-in uses composite key (can't filter)
+Risk: Employee blocked if soft-deleted session exists for shift
+Fix: Convert to findFirst with deletedAt: null
+
+File: attendance-checkin.service.ts
+Line: 54
+Method: findFirst
+Query: findFirst({ where: { employeeId, checkinTime: not null, checkoutTime: null, ... } })
+Issue: Finds active sessions but includes deleted ones
+Risk: Deleted overlapping sessions block new check-ins
+Fix: Add deletedAt: null
+
+File: attendance-checkin.service.ts
+Line: 222
+Method: findUnique
+Query: findUnique({ where: { id: attendanceId } })
+Issue: Closes unclosed sessions on deleted records
+Risk: Employee marks deleted session as closed, corrupts audit
+Fix: Convert to findFirst with deletedAt: null
+
+File: attendance-checkin.service.ts
+Line: 236
+Method: findMany
+Query: findMany({ where: { employeeId, date: sessionDate, checkinTime: not null, checkoutTime: null } })
+Issue: Finds today's open sessions but includes deleted ones
+Risk: Employee selects deleted session for checkout
+Fix: Add deletedAt: null
+
+File: attendance-checkin.service.ts
+Line: 243
+Method: findMany
+Query: findMany({ where: { employeeId, date: yesterday, checkinTime: not null, checkoutTime: null } })
+Issue: Cross-day shift fallback missing soft-delete filter
+Risk: Deleted yesterday sessions leak into today checkout
+Fix: Add deletedAt: null
+
+File: attendance-checkin.service.ts
+Line: 370
+Method: findUnique
+Query: findUnique({ where: { id: attendanceId } })
+Issue: Mark forgot checkout on deleted records
+Risk: Corrupts state of non-existent session
+Fix: Convert to findFirst with deletedAt: null
+
+================================================================================
+HIGH — ATTENDANCE CORRECTION (2 INSTANCES)
+================================================================================
+
+File: attendance-correction.service.ts
+Line: 62
+Method: findUnique
+Query: findUnique({ where: { id: dto.attendanceId } })
+Issue: Fetch record to correct includes deleted records
+Risk: Correction request targets deleted attendance record
+Fix: Convert to findFirst with deletedAt: null
+
+File: attendance-correction.service.ts
+Line: 72
+Method: findFirst
+Query: findFirst({ where: { employeeId, date: dateObj, ...shiftFilter } })
+Issue: Find existing record to link includes deleted ones
+Risk: Data duplication if deleted record later restored
+Fix: Add deletedAt: null
+
+================================================================================
+HIGH — VALIDATION GUARDS (2 INSTANCES)
+================================================================================
+
+File: shift-assignment.service.ts
+Line: 274
+Method: findFirst
+Query: findFirst({ where: { employeeId, shiftId, date: { gte, lte } } })
+Issue: Guard prevents deletion if attendance exists (includes deleted)
+Risk: Deleted session blocks shift-assignment deletion
+Fix: Add deletedAt: null
+
+File: shift-schedule.service.ts
+Line: 147
+Method: findFirst
+Query: findFirst({ where: { employeeId, shiftId, date } })
+Issue: Block deletion if attendance exists (includes deleted)
+Risk: Deleted session prevents shift-schedule changes
+Fix: Add deletedAt: null
+
+================================================================================
+MEDIUM — NOTIFICATIONS (1 INSTANCE)
+================================================================================
+
+File: notification.service.ts
+Line: 63
+Method: findMany
+Query: findMany({ where: { date: today, checkinTime: not null } })
+Issue: Find clocked-in employees today (includes deleted checkins)
+Risk: Employees with deleted sessions won't get reminders
+Fix: Add deletedAt: null
+
+================================================================================
+PROTECTED QUERIES (14 INSTANCES)
+================================================================================
+
+attendance-query.service.ts:
+  Line 39   findMany  Today + yesterday sessions                 ✓ Has deletedAt: null
+  Line 73   findMany  Monthly summary                            ✓ Has deletedAt: null
+  Line 112  findMany  Paginated list                             ✓ Has deletedAt: null
+  Line 123  count     Paired with line 112                       ✓ Has deletedAt: null
+  Line 146  findMany  Export query                               ✓ Has deletedAt: null
+  Line 153  count     Paired with line 146                       ✓ Has deletedAt: null
+  Line 182  findMany  Period summary grouped                     ✓ Has deletedAt: null
+  Line 223  findMany  Unclosed sessions (explicit)               ✓ Has deletedAt: null
+  Line 406  findMany  Manager advanced filter                    ✓ Has deletedAt: null
+  Line 417  count     Paired with line 406                       ✓ Has deletedAt: null
+  Line 437  findUnique  Fetch before soft-delete (by ID)         ✓ Safe (ID lookup)
+
+attendance-correction.service.ts:
+  Line 136  findUnique  Approve, fetch by ID                      ✓ Safe (ID lookup)
+  Line 218  findUnique  Admin edit, fetch by ID                   ✓ Safe (ID lookup)
+
+================================================================================
+REMEDIATION PRIORITY
+================================================================================
+
+IMMEDIATE (Fix first):
+  [ ] attendance.service.ts:50
+  [ ] attendance-checkin.service.ts:43, 54, 222, 236, 243, 370
+
+SOON (Fix within sprint):
+  [ ] attendance-correction.service.ts:62, 72
+  [ ] shift-assignment.service.ts:274
+  [ ] shift-schedule.service.ts:147
+  [ ] notification.service.ts:63
+
+================================================================================
+IMPACT ASSESSMENT
+================================================================================
+
+Data Integrity:      HIGH (deleted records leak into active logic)
+Bug Likelihood:      HIGH (5 of 11 are core checkin/checkout paths)
+Estimated Fix Time:  LOW (11 one-line changes)
+Testing Effort:      MEDIUM (soft-delete scenarios)
+Risk if Not Fixed:   CRITICAL (business logic corruption, audit issues)
+
+================================================================================
