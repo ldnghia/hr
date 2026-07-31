@@ -193,6 +193,15 @@ export default function LeaveDetailPage() {
                 label={t('leave.duration')}
                 value={t('leave.durationDays', { n: leave.days })}
               />
+              {leave.isHalfDay && leave.halfDaySession && (
+                <Row
+                  label={t('leave.halfDaySession', 'Thời điểm nghỉ')}
+                  value={t(
+                    leave.halfDaySession === 'first' ? 'leave.halfDayFirst' : 'leave.halfDayLast',
+                    leave.halfDaySession === 'first' ? 'Nửa ca đầu' : 'Nửa ca cuối',
+                  )}
+                />
+              )}
               <Row label={t('common.status')} value={statusBadge(leave.status)} />
               <Row label={t('leave.currentStep')} value={`${leave.currentStep} / 2`} />
             </dl>

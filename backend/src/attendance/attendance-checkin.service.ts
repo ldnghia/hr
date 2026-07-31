@@ -192,6 +192,13 @@ export class AttendanceCheckinService {
         where: { id: softDeleted.id },
         data: { ...checkinData, deletedAt: null, checkoutTime: null, workingHours: null },
       });
+    } else if (existing) {
+      // A row for this key already exists without a check-in (e.g. leave approval
+      // pre-created it with isOnLeave: true) — fill it in instead of inserting.
+      attendance = await this.prisma.attendance.update({
+        where: { id: existing.id },
+        data: checkinData,
+      });
     } else {
       attendance = await this.prisma.attendance.create({
         data: { employeeId, date: sessionDate, shiftId, ...checkinData },
