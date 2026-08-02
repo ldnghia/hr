@@ -50,7 +50,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
         run: |
-          cd /home/phamhai/hr/hr_project
+          cd /home/dcorp/hr
           git fetch origin main
           git reset --hard origin/main
           cd frontend
@@ -59,7 +59,7 @@ jobs:
 
       - name: Reload PM2 (zero-downtime)
         run: |
-          cd /home/phamhai/hr/hr_project
+          cd /home/dcorp/hr
           pm2 reload ecosystem.config.js --only hr-frontend --update-env || pm2 start ecosystem.config.js --only hr-frontend
           pm2 save
 
