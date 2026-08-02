@@ -240,6 +240,26 @@ export class AttendanceExportCombinedService {
       include: { employee: { select: { id: true, code: true, fullName: true, position: { select: { name: true } } } } },
     }) : [];
 
+    // Overlay leave onto the SHIFT grid for days with no attendance row (e.g. leave approved
+    // before the shift schedule existed for that day — see leave-approval.service.ts finalise()).
+    // Full-day leave marks all S/C/T cells as 'P', matching how a real isOnLeave attendance row renders.
+    if (workingMode === 'SHIFT') {
+      for (const lr of leaveReqs) {
+        if (!lr.employeeId || !lr.fromDate || !lr.toDate) continue;
+        const cursor = new Date(lr.fromDate);
+        const lrEnd = new Date(lr.toDate);
+        while (cursor <= lrEnd) {
+          if (cursor >= start && cursor <= end) {
+            const key = `${lr.employeeId}_${localDateStr(cursor)}`;
+            const existing = shiftLookup.get(key);
+            if (existing) existing.isOnLeave = true;
+            else shiftLookup.set(key, { S: false, C: false, T: false, isOnLeave: true, corrected: { S: false, C: false, T: false } });
+          }
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
+    }
+
     // Attendance day sets
     const attDaySet        = new Map<string, boolean>();
     const attHoursMap      = new Map<number, number>();
