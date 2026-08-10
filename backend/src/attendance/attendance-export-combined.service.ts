@@ -14,6 +14,7 @@ import { formatDate } from '../common/utils/format';
 import * as ExcelJS from 'exceljs';
 import { Response } from 'express';
 import { buildLateEarlySheet } from './attendance-export-late-early-sheet';
+import { buildAttendanceDetailSheet } from './attendance-export-detail-sheet';
 
 const localDateStr = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -124,6 +125,7 @@ export class AttendanceExportCombinedService {
           id: true, code: true, fullName: true,
           department: { select: { id: true, name: true } },
           position: { select: { id: true, name: true } },
+          branch: { select: { id: true, name: true } },
         },
         orderBy: { code: 'asc' },
       }),
@@ -200,18 +202,23 @@ export class AttendanceExportCombinedService {
       });
     }
 
-    // Shift schedule count per employee (for SHIFT mode "Số ca đã phân" column)
+    // Shift schedule count per employee (for SHIFT mode "Số ca đã phân" column) +
+    // per (employee, date) key set — used by the detail sheet to know which days a
+    // SHIFT employee was actually expected to work (CC schedules can span 7 days/week,
+    // so calendar working-day logic doesn't apply there).
     const scheduleCountMap = new Map<number, number>();
+    const scheduledKeySet = new Set<string>();
     if (workingMode === 'SHIFT' && empIds.length > 0) {
       const schedules = await this.prisma.employeeShiftSchedule.findMany({
         where: {
           employeeId: { in: empIds },
           date: { gte: start, lte: end },
         },
-        select: { employeeId: true },
+        select: { employeeId: true, date: true },
       });
       schedules.forEach((s) => {
         scheduleCountMap.set(s.employeeId, (scheduleCountMap.get(s.employeeId) ?? 0) + 1);
+        scheduledKeySet.add(`${s.employeeId}_${localDateStr(new Date(s.date))}`);
       });
     }
 
@@ -339,6 +346,7 @@ export class AttendanceExportCombinedService {
     this.addGridSheet(wb, employees, days, lookup, workingMode, shiftLookup, fixedCorrectedSet);
     this.addSummarySheet(wb, summaries, start, end, officialWorkingDays, officialHolidayDays, workingMode, officeTotals);
     buildLateEarlySheet(wb, records);
+    buildAttendanceDetailSheet(wb, employees, records, leaveReqs, calMap, start, end, workingMode, scheduledKeySet);
 
     const month = String(start.getMonth() + 1).padStart(2, '0');
     const year  = start.getFullYear();

@@ -9,7 +9,7 @@
  */
 import * as ExcelJS from 'exceljs';
 
-const DOW_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+export const DOW_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 /**
  * Late/early minutes from raw check-in/check-out clock time vs shift start/end.
@@ -17,7 +17,7 @@ const DOW_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
  * (mirrors the frontend's calcLateEarlyMinutes) so cross-day shifts don't produce
  * a bogus number when checkout lands after midnight.
  */
-function calcLateEarlyMinutes(
+export function calcLateEarlyMinutes(
   ci: Date | null,
   co: Date | null,
   shift?: { startTime?: string; endTime?: string; isCrossDay?: boolean } | null,
@@ -47,7 +47,7 @@ function calcLateEarlyMinutes(
   return { late, early };
 }
 
-const fmtT = (iso: string | null | undefined) =>
+export const fmtT = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
 
 export function buildLateEarlySheet(wb: ExcelJS.Workbook, records: any[]) {
