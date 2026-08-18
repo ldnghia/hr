@@ -226,6 +226,8 @@
     "newRequest": "New Leave Request",
     "myLeave": "My Leave",
     "allRequests": "Leave Requests",
+    "exportDetail": "Export Detail Report",
+    "exportYear": "Select year to export",
     "pendingApprovals": "Pending Your Approval",
     "leaveBalance": "Leave Balance",
     "leaveType": "Leave Type",

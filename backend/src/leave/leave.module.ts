@@ -3,6 +3,7 @@ import { LeaveService } from './leave.service';
 import { LeaveApprovalService } from './leave-approval.service';
 import { LeaveBalanceService } from './leave-balance.service';
 import { WorkflowEngineService } from './workflow-engine.service';
+import { LeaveExportService } from './leave-export.service';
 import { LeaveController } from './leave.controller';
 import { AuditModule } from '../audit/audit.module';
 
@@ -14,6 +15,7 @@ import { AuditModule } from '../audit/audit.module';
     LeaveApprovalService,
     LeaveBalanceService,
     WorkflowEngineService,
+    LeaveExportService,
   ],
   exports: [LeaveService, LeaveBalanceService, WorkflowEngineService],
 })

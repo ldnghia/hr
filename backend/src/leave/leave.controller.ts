@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   Query,
+  Res,
   ParseIntPipe,
   HttpCode,
   HttpStatus,
@@ -15,13 +16,16 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { LeaveService } from './leave.service';
 import { LeaveApprovalService } from './leave-approval.service';
 import { LeaveBalanceService } from './leave-balance.service';
+import { LeaveExportService } from './leave-export.service';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { ActionLeaveDto } from './dto/action-leave.dto';
 import { AdjustBalanceDto, AccrueLeaveDto } from './dto/adjust-balance.dto';
 import { ListLeaveRequestDto } from './dto/list-leave-request.dto';
+import { ExportLeaveReportDto } from './dto/export-leave-report.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -33,6 +37,7 @@ export class LeaveController {
     private readonly leaveService: LeaveService,
     private readonly leaveApprovalService: LeaveApprovalService,
     private readonly leaveBalanceService: LeaveBalanceService,
+    private readonly leaveExportService: LeaveExportService,
   ) {}
 
   // ── POST /leave-request ───────────────────────────────────────────────────
@@ -141,6 +146,15 @@ export class LeaveController {
   @ApiOperation({ summary: 'List all leave requests (admin, hr, manager)' })
   findAll(@Query() dto: ListLeaveRequestDto) {
     return this.leaveService.findAll(dto);
+  }
+
+  // ── GET /leave-request/report/export-detail (admin / hr) ──────────────────
+
+  @Get('report/export-detail')
+  @Roles('admin', 'hr')
+  @ApiOperation({ summary: 'Export detailed leave report to Excel, grouped by employee (admin, hr)' })
+  exportDetailReport(@Query() dto: ExportLeaveReportDto, @Res() res: Response) {
+    return this.leaveExportService.exportDetail(dto, res);
   }
 
   // ── GET /leave-request/:id ────────────────────────────────────────────────

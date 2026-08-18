@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnsType } from 'antd/es/table';
-import { Button, Select, Input, Modal, Alert } from 'antd';
-import { Plus, CheckCircle, XCircle, Ban } from 'lucide-react';
+import { Button, Select, Input, Modal, Alert, Tooltip } from 'antd';
+import { Plus, CheckCircle, XCircle, Ban, Download } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { DataTable } from '@/components/antd/data-table';
 import { StatusTag } from '@/components/antd/status-tag';
@@ -34,6 +34,8 @@ function extractError(err: unknown, fallback: string): string {
   if (raw) return Array.isArray(raw) ? raw[0] : raw;
   return e?.message ?? fallback;
 }
+
+const EXPORT_MIN_YEAR = 2026;
 
 const STATUS_VARIANT: Record<string, 'warning' | 'success' | 'error' | 'default'> = {
   pending: 'warning',
@@ -272,6 +274,9 @@ export default function LeavePage() {
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | undefined>('pending');
   const [pageError, setPageError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportYear, setExportYear] = useState(Math.max(EXPORT_MIN_YEAR, new Date().getFullYear()));
   const { page, limit, reset, goTo } = usePagination(10);
 
   const isApprover = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
@@ -340,6 +345,24 @@ export default function LeavePage() {
     }
   }
 
+  async function handleExportDetail(year: number) {
+    setExporting(true);
+    try {
+      const res = await leaveService.exportDetail({ year });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Bao_Cao_Nghi_Phep_Chi_Tiet_${year}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportModalOpen(false);
+    } catch (err) {
+      setPageError(extractError(err, 'Export failed'));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function handleCancel(id: number) {
     Modal.confirm({
       title: t('leave.cancelConfirm', 'Bạn có chắc muốn hủy yêu cầu nghỉ phép này?'),
@@ -384,9 +407,17 @@ export default function LeavePage() {
         title: 'Lý do',
         dataIndex: 'reason',
         key: 'reason',
-        width: 200,
-        ellipsis: true,
-        render: (reason: string) => reason || <span className="text-gray-300">—</span>,
+        width: 220,
+        render: (reason: string) =>
+          reason ? (
+            <Tooltip title={reason}>
+              <p className="line-clamp-2 max-w-[220px] whitespace-normal break-words text-[13px] leading-5">
+                {reason}
+              </p>
+            </Tooltip>
+          ) : (
+            <span className="text-gray-300">—</span>
+          ),
       },
       {
         title: t('leave.colDateRange'),
@@ -511,6 +542,14 @@ export default function LeavePage() {
             </div>
             <div className="flex items-center gap-2">
               <ReloadButton onClick={load} loading={loading} />
+              {isAdminOrHR && (
+                <Button
+                  icon={<Download size={14} />}
+                  onClick={() => setExportModalOpen(true)}
+                >
+                  {t('leave.exportDetail')}
+                </Button>
+              )}
               {newRequestButton}
             </div>
           </div>
@@ -553,6 +592,29 @@ export default function LeavePage() {
         onConfirm={handleReject}
         employeeName={rejectTarget?.employee?.fullName}
       />
+
+      <Modal
+        open={exportModalOpen}
+        onCancel={() => setExportModalOpen(false)}
+        title={t('leave.exportDetail')}
+        onOk={() => handleExportDetail(exportYear)}
+        confirmLoading={exporting}
+        okText={t('common.export')}
+        cancelText={t('common.cancel')}
+      >
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-gray-600">{t('leave.exportYear')}</label>
+          <Select
+            value={exportYear}
+            onChange={setExportYear}
+            className="w-full"
+            options={Array.from(
+              { length: Math.max(1, new Date().getFullYear() - EXPORT_MIN_YEAR + 1) },
+              (_, i) => EXPORT_MIN_YEAR + i,
+            ).map((y) => ({ value: y, label: y }))}
+          />
+        </div>
+      </Modal>
     </AppShell>
   );
 }

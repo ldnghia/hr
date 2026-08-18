@@ -226,6 +226,8 @@
     "newRequest": "Yêu cầu nghỉ phép mới",
     "myLeave": "Nghỉ phép của tôi",
     "allRequests": "Yêu cầu nghỉ phép",
+    "exportDetail": "Xuất báo cáo chi tiết",
+    "exportYear": "Chọn năm xuất báo cáo",
     "pendingApprovals": "Chờ bạn phê duyệt",
     "leaveBalance": "Số ngày phép",
     "leaveType": "Loại nghỉ phép",

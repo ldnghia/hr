@@ -24,6 +24,15 @@ export interface ListLeaveParams {
   employeeId?: number;
 }
 
+export interface ExportLeaveReportParams {
+  year?: number;
+  status?: string;
+  leaveType?: string;
+  departmentId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export interface SetBalancePayload {
   total: number;
   reason?: string;
@@ -82,4 +91,8 @@ export const leaveService = {
 
   pendingForHR: () =>
     api.get<LeaveRequest[]>('/leave-request/pending/hr').then((r) => r.data),
+
+  /** Admin/HR: export detailed leave report as Excel, grouped by employee */
+  exportDetail: (params?: ExportLeaveReportParams) =>
+    api.get('/leave-request/report/export-detail', { params, responseType: 'blob' }),
 };
