@@ -16,19 +16,6 @@ import { PaginationDto, paginate, buildPaginatedResponse } from '../common/dto/p
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Count weekdays (Mon–Fri) between two dates, inclusive. */
-function calculateBusinessDays(fromDate: Date, toDate: Date): number {
-  if (toDate < fromDate) return 0;
-  let count = 0;
-  const cursor = new Date(fromDate.getTime());
-  while (cursor <= toDate) {
-    const day = cursor.getDay();
-    if (day !== 0 && day !== 6) count++;
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return count;
-}
-
 const EMPLOYEE_SELECT = {
   id: true,
   code: true,
@@ -71,26 +58,9 @@ export class LeaveService {
       throw new BadRequestException('Half-day leave must have fromDate equal to toDate');
     }
 
-    const emp = await this.prisma.employee.findUnique({
-      where: { id: employeeId },
-      select: { workingMode: true },
-    });
-    const isShiftEmployee = emp?.workingMode === 'SHIFT';
-
-    // SHIFT employees work weekends — count all calendar days; FIXED: weekdays only
-    let businessDays: number;
-    if (isShiftEmployee) {
-      const msPerDay = 86400000;
-      businessDays = Math.round((toDate.getTime() - fromDate.getTime()) / msPerDay) + 1;
-    } else {
-      businessDays = calculateBusinessDays(fromDate, toDate);
-    }
-
-    if (businessDays === 0) {
-      throw new BadRequestException(
-        'Leave must include at least one business day (Mon–Fri)',
-      );
-    }
+    // Count all calendar days in range, including weekends.
+    const msPerDay = 86400000;
+    const businessDays = Math.round((toDate.getTime() - fromDate.getTime()) / msPerDay) + 1;
 
     const days = dto.isHalfDay ? 0.5 : businessDays;
 
