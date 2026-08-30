@@ -15,9 +15,10 @@ import { ShiftResolverService } from './helpers/shift-resolver';
 import { LocationService } from './location.service';
 import { CalendarModule } from '../calendar/calendar.module';
 import { DeviceModule } from '../device/device.module';
+import { SystemConfigModule } from '../system-config/system-config.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), CalendarModule, DeviceModule],
+  imports: [ScheduleModule.forRoot(), CalendarModule, DeviceModule, SystemConfigModule],
   controllers: [AttendanceController],
   providers: [
     AttendanceService,

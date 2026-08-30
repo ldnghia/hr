@@ -9,6 +9,8 @@ export interface ListEmployeeParams {
   role?: string;
   departmentId?: number;
   managerId?: number;
+  /** Apply the report_exclude_attendance_exempt setting to this fetch (report screens only). */
+  excludeAttendanceExempt?: boolean;
 }
 
 export interface CreateEmployeePayload {
@@ -26,6 +28,7 @@ export interface CreateEmployeePayload {
   telegramId?: string;
   initialLeaveBalance?: number;
   shiftId?: number;
+  attendanceExempt?: boolean;
 }
 
 export interface UpdateEmployeePayload {
@@ -42,6 +45,7 @@ export interface UpdateEmployeePayload {
   telegramId?: string;
   shiftId?: number | null;
   joinDate?: string;
+  attendanceExempt?: boolean;
 }
 
 export interface AdminUpdateProfilePayload {

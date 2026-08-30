@@ -560,7 +560,7 @@ export function AdminAttendanceReport({ workingMode, title }: Props = {}) {
         // employee: fetch just own record
         ? employeeService.get(scopeEmpId).then(e => ({ data: [e] }))
         : employeeService.list({
-            limit: 500, status: 'official',
+            limit: 500, status: 'official', excludeAttendanceExempt: true,
             ...(scopeDeptId ? { departmentId: scopeDeptId } : {}),
           });
 

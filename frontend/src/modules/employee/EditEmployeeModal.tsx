@@ -38,13 +38,14 @@ interface FormState {
   shiftId: string;
   deviceValidationMode: string;
   joinDate: string;
+  attendanceExempt: boolean;
 }
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
 export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEditBalance = false, isAdmin = false, onSuccess }: EditEmployeeModalProps) {
   const { t } = useTranslation();
-  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '', shiftId: '', deviceValidationMode: 'DISABLED', joinDate: '' });
+  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '', shiftId: '', deviceValidationMode: 'DISABLED', joinDate: '', attendanceExempt: false });
   const [errors, setErrors]     = useState<FormErrors>({});
   const [apiError, setApiError] = useState('');
   const [saving, setSaving]     = useState(false);
@@ -80,6 +81,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
       shiftId:             String(employee.shiftId     ?? ''),
       deviceValidationMode: employee.deviceValidationMode ?? 'DISABLED',
       joinDate:            employee.joinDate ? employee.joinDate.slice(0, 10) : '',
+      attendanceExempt:    employee.attendanceExempt ?? false,
     });
     setErrors({});
     setApiError('');
@@ -194,6 +196,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
         telegramId:           form.telegramId || undefined,
         shiftId:              form.shiftId ? Number(form.shiftId) : null,
         joinDate:             form.joinDate || undefined,
+        attendanceExempt:     form.attendanceExempt,
         ...(isAdmin && { deviceValidationMode: form.deviceValidationMode as 'DISABLED' | 'WARNING' | 'STRICT' }),
       });
 
@@ -298,6 +301,18 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
             value={form.joinDate}
             onChange={(e) => set('joinDate', e.target.value)}
           />
+          <label className="flex items-start gap-2.5 rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={form.attendanceExempt}
+              onChange={(e) => setForm((f) => ({ ...f, attendanceExempt: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-700">Nhân viên ưu tiên (miễn chấm công)</span>
+              <span className="block text-xs text-gray-500">Không bắt buộc chấm công; không tính vào chưa checkin/vắng và không nhận nhắc nhở chấm công.</span>
+            </span>
+          </label>
         </fieldset>
 
         <hr className="border-gray-100" />

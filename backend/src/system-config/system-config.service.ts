@@ -14,6 +14,7 @@ export class SystemConfigService implements OnModuleInit {
       { key: 'attendance_correction_monthly_limit', value: '3', description: 'Max attendance correction requests per employee per month' },
       { key: 'device_max_per_employee', value: '2', description: 'Số thiết bị tối đa mỗi nhân viên được đăng ký' },
       { key: 'device_check_enabled', value: 'false', description: 'Bật/tắt chế độ kiểm tra thiết bị khi chấm công' },
+      { key: 'report_exclude_attendance_exempt', value: 'false', description: 'Khi bật, các báo cáo chấm công sẽ loại bỏ nhân viên được đánh dấu ưu tiên (miễn chấm công)' },
     ];
 
     for (const d of defaults) {

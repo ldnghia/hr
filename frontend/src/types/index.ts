@@ -109,6 +109,7 @@ export interface Employee {
   shiftId?: number | null;
   telegramId?: string | null;
   deviceValidationMode?: 'DISABLED' | 'WARNING' | 'STRICT';
+  attendanceExempt?: boolean;
   branch?: Branch;
   department?: Pick<Department, 'id' | 'name' | 'code' | 'workingType'>;
   position?: Pick<Position, 'id' | 'name' | 'code'>;

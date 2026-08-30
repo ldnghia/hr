@@ -37,6 +37,11 @@ export function EmployeeProfile({ employee, leaveBalance }: EmployeeProfileProps
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {statusBadge(employee.status)}
             {statusBadge(employee.role ?? '')}
+            {employee.attendanceExempt && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                Ưu tiên · miễn chấm công
+              </span>
+            )}
             {employee.department && (
               <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-600">
                 {employee.department.name}

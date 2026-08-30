@@ -14,6 +14,7 @@ import { ListEmployeeDto } from './dto/list-employee.dto';
 import { UpdateMeDto } from '../me/dto/update-me.dto';
 import { ChangeMyPasswordDto } from '../me/dto/change-my-password.dto';
 import { paginate, buildPaginatedResponse } from '../common/dto/pagination.dto';
+import { SystemConfigService } from '../system-config/system-config.service';
 import * as bcrypt from 'bcrypt';
 
 const EMPLOYEE_SELECT = {
@@ -36,6 +37,7 @@ const EMPLOYEE_SELECT = {
   workingMode: true,
   shiftId: true,
   deviceValidationMode: true,
+  attendanceExempt: true,
   branch:      { select: { id: true, name: true } },
   department:  { select: { id: true, name: true, code: true, workingType: true } },
   position:    { select: { id: true, name: true, code: true } },
@@ -53,6 +55,7 @@ export class EmployeeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly systemConfig: SystemConfigService,
   ) {}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -137,6 +140,7 @@ export class EmployeeService {
         workingMode,
         shiftId:      dto.shiftId,
         telegramId:   dto.telegramId,
+        attendanceExempt: dto.attendanceExempt ?? false,
       },
       select: EMPLOYEE_SELECT,
     });
@@ -187,7 +191,7 @@ export class EmployeeService {
   // ─── Find all / one ───────────────────────────────────────────────────────
 
   async findAll(dto: ListEmployeeDto, requesterId?: number, requesterRole?: string) {
-    const { page = 1, limit = 20, search, status, role, branchId, departmentId, managerId } = dto;
+    const { page = 1, limit = 20, search, status, role, branchId, departmentId, managerId, excludeAttendanceExempt } = dto;
     const { skip, take } = paginate(page, limit);
 
     const where: any = {};
@@ -204,6 +208,13 @@ export class EmployeeService {
     if (branchId)     where.branchId     = branchId;
     if (departmentId) where.departmentId = departmentId;
     if (managerId)    where.managerId    = managerId;
+
+    // Report screens opt in via excludeAttendanceExempt=true; the actual exclusion
+    // still depends on the report_exclude_attendance_exempt system setting.
+    if (excludeAttendanceExempt) {
+      const excludeEnabled = (await this.systemConfig.get('report_exclude_attendance_exempt')) === 'true';
+      if (excludeEnabled) where.attendanceExempt = false;
+    }
 
     // Manager: auto-scope to their own department when no explicit dept/manager filter
     if (requesterRole === 'manager' && requesterId && !departmentId && !managerId) {
@@ -286,6 +297,7 @@ export class EmployeeService {
         telegramId:           dto.telegramId,
         joinDate:             dto.joinDate ? new Date(dto.joinDate) : undefined,
         deviceValidationMode: dto.deviceValidationMode,
+        attendanceExempt:     dto.attendanceExempt,
       },
       select: EMPLOYEE_SELECT,
     });

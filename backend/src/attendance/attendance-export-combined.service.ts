@@ -104,6 +104,7 @@ export class AttendanceExportCombinedService {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) days.push(new Date(d));
 
     // ── Shared data fetch ─────────────────────────────────────────────────────
+    const excludeAttendanceExempt = await this.queryService.isAttendanceExemptExcludedFromReports();
     const [{ data: records }, allEmployees] = await Promise.all([
       this.queryService.getReport(
         { ...dto, page: 1, limit: 10000, isLate: undefined, isEarlyOut: undefined, isOvertime: undefined },
@@ -120,6 +121,7 @@ export class AttendanceExportCombinedService {
             ? { OR: [{ workingMode: 'FIXED' }, { workingMode: null }] }
             : { workingMode: 'SHIFT' }),
           ...(dto.departmentId ? { departmentId: dto.departmentId } : {}),
+          ...(excludeAttendanceExempt ? { attendanceExempt: false } : {}),
         },
         select: {
           id: true, code: true, fullName: true,

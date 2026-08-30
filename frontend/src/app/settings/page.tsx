@@ -53,6 +53,7 @@ export default function SettingsPage() {
   const telegramConfigs = configs.filter(c => c.key.startsWith('telegram_'));
   const deviceCheckEnabled = localValues['device_check_enabled'] === 'true';
   const deviceMaxPerEmployee = localValues['device_max_per_employee'] ?? '2';
+  const excludeAttendanceExempt = localValues['report_exclude_attendance_exempt'] === 'true';
 
   return (
     <AppShell title={t('settings.title')}>
@@ -232,6 +233,67 @@ export default function SettingsPage() {
                 <p className="mt-2 text-xs text-gray-400">Đang lưu...</p>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Attendance Report Configuration Card */}
+        <div>
+          <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-600 to-orange-600">
+            Cài đặt báo cáo chấm công
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">Quy định cách nhân viên ưu tiên (miễn chấm công) xuất hiện trong báo cáo.</p>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-gray-200/50 bg-white/60 backdrop-blur-xl shadow-lg transition-all hover:shadow-amber-500/10">
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+            <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-amber-600 text-white shadow-lg shadow-amber-200">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+              </svg>
+            </div>
+            <h3 className="font-semibold text-gray-900">Nhân viên ưu tiên trong báo cáo</h3>
+          </div>
+
+          <div className="p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                  Loại nhân viên ưu tiên khỏi báo cáo
+                  <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 uppercase">report_exclude_attendance_exempt</span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  Tắt (mặc định): báo cáo chấm công tính tất cả nhân viên. Bật: báo cáo sẽ loại bỏ các nhân viên được đánh dấu &quot;ưu tiên — miễn chấm công&quot;.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={excludeAttendanceExempt}
+                onClick={async () => {
+                  const newVal = (!excludeAttendanceExempt).toString();
+                  setLocalValues(prev => ({ ...prev, report_exclude_attendance_exempt: newVal }));
+                  setSaving('report_exclude_attendance_exempt');
+                  setError('');
+                  try {
+                    await systemConfigService.update('report_exclude_attendance_exempt', newVal);
+                  } catch {
+                    setError('Failed to update report_exclude_attendance_exempt.');
+                    setLocalValues(prev => ({ ...prev, report_exclude_attendance_exempt: excludeAttendanceExempt.toString() }));
+                  } finally {
+                    setSaving(null);
+                  }
+                }}
+                disabled={saving === 'report_exclude_attendance_exempt'}
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 ${excludeAttendanceExempt ? 'bg-amber-500' : 'bg-gray-200'} disabled:opacity-50`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-6 w-6 rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${excludeAttendanceExempt ? 'translate-x-5' : 'translate-x-0'}`}
+                />
+              </button>
+            </div>
+            {saving === 'report_exclude_attendance_exempt' && (
+              <p className="mt-2 text-xs text-gray-400">Đang lưu...</p>
+            )}
           </div>
         </div>
       </div>

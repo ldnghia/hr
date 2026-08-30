@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsInt,
   IsIn,
+  IsBoolean,
   MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -93,4 +94,9 @@ export class CreateEmployeeDto {
   @Type(() => Number)
   @IsInt()
   initialLeaveBalance?: number;
+
+  @ApiPropertyOptional({ description: 'Nhân viên ưu tiên — không bắt buộc chấm công', default: false })
+  @IsOptional()
+  @IsBoolean()
+  attendanceExempt?: boolean;
 }

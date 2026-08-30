@@ -6,6 +6,7 @@ import {
   IsInt,
   IsIn,
   IsDateString,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -101,4 +102,9 @@ export class UpdateEmployeeDto {
   @Type(() => Number)
   @IsInt()
   initialLeaveBalance?: number;
+
+  @ApiPropertyOptional({ description: 'Nhân viên ưu tiên — không bắt buộc chấm công' })
+  @IsOptional()
+  @IsBoolean()
+  attendanceExempt?: boolean;
 }

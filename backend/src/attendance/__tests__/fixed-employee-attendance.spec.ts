@@ -15,6 +15,7 @@ import { ShiftResolverService } from '../helpers/shift-resolver';
 import { LocationService } from '../location.service';
 import { CalendarService } from '../../calendar/calendar.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DeviceValidationService } from '../../device/device-validation.service';
 import type { ShiftLike } from '../helpers/shift-resolver';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,6 +90,13 @@ function buildCalendarMock() {
   return { checkDay: jest.fn().mockResolvedValue({ isHoliday: false, isWeekend: false }) };
 }
 
+function buildDeviceValidationMock() {
+  return {
+    validateForCheckIn: jest.fn().mockResolvedValue({ unknown: false }),
+    validateForCheckOut: jest.fn().mockResolvedValue({ unknown: false }),
+  };
+}
+
 // ─── Test suite ───────────────────────────────────────────────────────────────
 
 describe('AttendanceCheckinService — FIXED employee', () => {
@@ -108,6 +116,7 @@ describe('AttendanceCheckinService — FIXED employee', () => {
         { provide: ShiftResolverService, useValue: buildShiftResolverMock(shiftOverride) },
         { provide: LocationService, useValue: buildLocationMock(true) }, // default: within geofence
         { provide: CalendarService, useValue: buildCalendarMock() },
+        { provide: DeviceValidationService, useValue: buildDeviceValidationMock() },
       ],
     }).compile();
 
@@ -197,6 +206,7 @@ describe('AttendanceCheckinService — FIXED employee', () => {
           { provide: ShiftResolverService, useValue: buildShiftResolverMock() },
           { provide: LocationService, useValue: buildLocationMock(false) }, // NOT within geofence
           { provide: CalendarService, useValue: buildCalendarMock() },
+          { provide: DeviceValidationService, useValue: buildDeviceValidationMock() },
         ],
       }).compile();
 
@@ -227,6 +237,7 @@ describe('AttendanceCheckinService — FIXED employee', () => {
           { provide: ShiftResolverService, useValue: buildShiftResolverMock() },
           { provide: LocationService, useValue: buildLocationMock(false) },
           { provide: CalendarService, useValue: buildCalendarMock() },
+          { provide: DeviceValidationService, useValue: buildDeviceValidationMock() },
         ],
       }).compile();
 

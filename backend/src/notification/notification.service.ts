@@ -42,7 +42,8 @@ export class NotificationService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 1. Get all employees with a Telegram ID who are not resigned
+    // 1. Get all employees with a Telegram ID who are not resigned.
+    // Employees flagged attendanceExempt are not required to check in, so skip reminders for them.
     const employees = await this.prisma.employee.findMany({
       where: {
         AND: [
@@ -50,6 +51,7 @@ export class NotificationService {
           { telegramId: { not: '' } }
         ],
         status: { not: 'resigned' },
+        attendanceExempt: false,
       },
       select: {
         id: true,

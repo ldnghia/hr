@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PaginationDto, paginate, buildPaginatedResponse } from '../common/dto/pagination.dto';
 import { ReportAttendanceDto } from './dto/report-attendance.dto';
 import { CalendarService } from '../calendar/calendar.service';
+import { SystemConfigService } from '../system-config/system-config.service';
 
 /** Format a Date using local calendar date (avoids UTC shift when server is UTC+7) */
 const localDateStr = (d: Date): string =>
@@ -23,7 +24,13 @@ export class AttendanceQueryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly calendarService: CalendarService,
+    private readonly systemConfig: SystemConfigService,
   ) {}
+
+  /** Whether attendance reports should exclude employees flagged attendanceExempt. */
+  async isAttendanceExemptExcludedFromReports(): Promise<boolean> {
+    return (await this.systemConfig.get('report_exclude_attendance_exempt')) === 'true';
+  }
 
   // ─── Today status (returns array — multi-shift aware) ────────────────────
 
@@ -403,6 +410,10 @@ export class AttendanceQueryService {
     if (employeeId) where.AND.push({ employeeId });
     if (departmentId) where.AND.push({ employee: { departmentId } });
     if (workingMode) where.AND.push({ employee: { workingMode } });
+
+    if (await this.isAttendanceExemptExcludedFromReports()) {
+      where.AND.push({ employee: { attendanceExempt: false } });
+    }
 
     if (dateFrom || dateTo) {
       const dateFilter: any = {};

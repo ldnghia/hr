@@ -109,6 +109,7 @@ model Employee {
   deviceValidationMode String                    @default("DISABLED") @map("device_validation_mode")
   registeredDevices    RegisteredDevice[]        @relation("EmployeeToDevices")
   registeredDevicesByMe RegisteredDevice[]       @relation("DeviceRegisteredBy")
+  attendanceExempt     Boolean                   @default(false) @map("attendance_exempt")
 
   @@map("employee")
 }
