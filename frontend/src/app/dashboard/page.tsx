@@ -11,6 +11,9 @@ import { leaveService } from '@/services/leave.service';
 import { contractService } from '@/services/contract.service';
 import { useTranslation } from 'react-i18next';
 import { formatDate, daysUntil } from '@/utils/format';
+import { useAuth } from '@/hooks/useAuth';
+import { AttendanceOpsSection } from './attendance-ops/attendance-ops-section';
+import { MyOverviewSection } from './my-overview/my-overview-section';
 import type { Employee, LeaveRequest, Contract } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -47,10 +50,16 @@ function extractError(err: unknown, fallback: string): string {
 
 const EXPIRY_WINDOW_DAYS = 30;
 
+/** Temporarily hidden — probation/pending-leave/contracts overview, superseded for now
+ * by AttendanceOpsSection above it. Flip back to true to restore. */
+const SHOW_LEGACY_OVERVIEW = false;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdminOrHr = user?.role === 'admin' || user?.role === 'hr';
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [probationEmployees, setProbationEmployees] = useState<Employee[]>([]);
@@ -168,6 +177,17 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-6">
 
+          {isAdminOrHr && (
+            <>
+              <AttendanceOpsSection />
+              {SHOW_LEGACY_OVERVIEW && <hr className="border-gray-100" />}
+            </>
+          )}
+
+          {(user?.role === 'manager' || user?.role === 'employee') && <MyOverviewSection />}
+
+          {SHOW_LEGACY_OVERVIEW && (
+          <>
           {errors.employees && (
             <Alert variant="error" message={errors.employees} />
           )}
@@ -340,6 +360,8 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : null}
+          </>
+          )}
 
         </div>
       )}
