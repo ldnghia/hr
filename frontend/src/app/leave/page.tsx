@@ -273,6 +273,7 @@ export default function LeavePage() {
   const [showModal, setShowModal] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | undefined>('pending');
+  const [search, setSearch] = useState('');
   const [pageError, setPageError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -303,7 +304,7 @@ export default function LeavePage() {
     setPageError('');
     try {
       const leaveData = isAdminOrHR
-        ? await leaveService.listAll({ page, limit, status: statusFilter || undefined })
+        ? await leaveService.listAll({ page, limit, status: statusFilter || undefined, search: search || undefined })
         : await leaveService.listMy({ page, limit, status: statusFilter || undefined });
       setResult(leaveData);
     } catch (err) {
@@ -311,7 +312,7 @@ export default function LeavePage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, statusFilter, isAdminOrHR]);
+  }, [page, limit, statusFilter, search, isAdminOrHR]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadPending(); }, [loadPending]);
@@ -411,7 +412,7 @@ export default function LeavePage() {
         render: (reason: string) =>
           reason ? (
             <Tooltip title={reason}>
-              <p className="line-clamp-2 max-w-[220px] whitespace-normal break-words text-[13px] leading-5">
+              <p className="max-w-[220px] truncate text-[13px] leading-5">
                 {reason}
               </p>
             </Tooltip>
@@ -525,7 +526,7 @@ export default function LeavePage() {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <h3 className="text-base font-semibold text-gray-800">{t('leave.allRequests')}</h3>
+              <h3 className="shrink-0 whitespace-nowrap text-base font-semibold text-gray-800">{t('leave.allRequests')}</h3>
               <Select
                 value={statusFilter}
                 allowClear
@@ -539,6 +540,15 @@ export default function LeavePage() {
                   { value: 'cancelled', label: t('common.cancelled') },
                 ]}
               />
+              {isAdminOrHR && (
+                <Input.Search
+                  allowClear
+                  placeholder={t('employee.searchPlaceholder')}
+                  className="w-56"
+                  onSearch={(val) => { setSearch(val); reset(); }}
+                  onChange={(e) => { if (!e.target.value) { setSearch(''); reset(); } }}
+                />
+              )}
             </div>
             <div className="flex items-center gap-2">
               <ReloadButton onClick={load} loading={loading} />

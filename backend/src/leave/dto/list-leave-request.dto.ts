@@ -19,4 +19,9 @@ export class ListLeaveRequestDto extends PaginationDto {
   @Type(() => Number)
   @IsInt()
   employeeId?: number;
+
+  @ApiPropertyOptional({ description: 'Search by employee name or code' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

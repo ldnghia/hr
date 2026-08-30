@@ -22,6 +22,7 @@ export interface ListLeaveParams {
   status?: string;
   leaveType?: string;
   employeeId?: number;
+  search?: string;
 }
 
 export interface ExportLeaveReportParams {

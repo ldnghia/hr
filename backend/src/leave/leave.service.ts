@@ -119,13 +119,21 @@ export class LeaveService {
   // ── Queries ───────────────────────────────────────────────────────────────
 
   async findAll(dto: ListLeaveRequestDto) {
-    const { page = 1, limit = 20, status, leaveType, employeeId } = dto;
+    const { page = 1, limit = 20, status, leaveType, employeeId, search } = dto;
     const { skip, take } = paginate(page, limit);
 
     const where: any = {};
     if (status) where.status = status;
     if (leaveType) where.type = leaveType;
     if (employeeId) where.employeeId = Number(employeeId);
+    if (search?.trim()) {
+      where.employee = {
+        OR: [
+          { fullName: { contains: search.trim(), mode: 'insensitive' } },
+          { code: { contains: search.trim(), mode: 'insensitive' } },
+        ],
+      };
+    }
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.leaveRequest.findMany({
