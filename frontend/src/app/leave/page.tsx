@@ -278,7 +278,7 @@ export default function LeavePage() {
   const [exporting, setExporting] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportYear, setExportYear] = useState(Math.max(EXPORT_MIN_YEAR, new Date().getFullYear()));
-  const { page, limit, reset, goTo } = usePagination(10);
+  const { page, limit, reset, goTo, setLimit } = usePagination(10);
 
   const isApprover = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
   const isAdminOrHR = user?.role === 'admin' || user?.role === 'hr';
@@ -460,37 +460,40 @@ export default function LeavePage() {
         align: 'center',
         fixed: 'right',
         render: (_, leave) => (
-          <div className="flex items-center justify-center gap-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-center gap-1.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
             {canActOnLeaveRequest(leave, user) && (
               <>
-                <button
-                  type="button"
+                <Button
+                  size="small"
+                  color="green"
+                  variant="outlined"
+                  icon={<CheckCircle size={14} />}
                   title={t('leave.approve')}
+                  aria-label={t('leave.approve')}
                   onClick={() => handleApprove(leave.id)}
-                  className="rounded p-1 text-green-500 hover:bg-green-50 transition-colors cursor-pointer"
-                >
-                  <CheckCircle size={15} />
-                </button>
-                <button
-                  type="button"
+                />
+                <Button
+                  size="small"
+                  color="danger"
+                  variant="outlined"
+                  icon={<XCircle size={14} />}
                   title={t('leave.reject')}
+                  aria-label={t('leave.reject')}
                   onClick={() => setRejectTarget(leave)}
-                  className="rounded p-1 text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
-                >
-                  <XCircle size={15} />
-                </button>
+                />
               </>
             )}
             {((leave.status === 'pending' && leave.employeeId === user?.id) ||
               (leave.status === 'approved' && user?.role === 'admin')) && (
-              <button
-                type="button"
+              <Button
+                size="small"
+                color="orange"
+                variant="outlined"
+                icon={<Ban size={14} />}
                 title={t('leave.cancel')}
+                aria-label={t('leave.cancel')}
                 onClick={() => handleCancel(leave.id)}
-                className="rounded p-1 text-amber-500 hover:bg-amber-50 transition-colors cursor-pointer"
-              >
-                <Ban size={15} />
-              </button>
+              />
             )}
           </div>
         ),
@@ -573,7 +576,8 @@ export default function LeavePage() {
               page={page}
               pageSize={limit}
               total={result?.meta.total ?? 0}
-              onPageChange={goTo}
+              onPageChange={(p, pageSize) => { if (pageSize !== limit) setLimit(pageSize); else goTo(p); }}
+              pagination={{ showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }}
               scroll={{ x: 'max-content' }}
               onRow={(leave) => ({
                 onClick: () => router.push(`/leave/${leave.id}`),

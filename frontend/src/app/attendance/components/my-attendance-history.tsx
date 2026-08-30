@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageSpinner } from '@/components/ui/Spinner';
-import { Pagination } from '@/components/ui/Pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { attendanceService } from '@/services/attendance.service';
 import { formatDate, formatDateTime, formatHours } from '@/utils/format';
@@ -27,7 +26,7 @@ export function MyAttendanceHistory({ isAdminOrHr, onAdminEditSuccess, refreshKe
   const { t } = useTranslation();
   const [records, setRecords] = useState<PaginatedResponse<AttendanceRecord> | null>(null);
   const [loading, setLoading] = useState(true);
-  const { page, limit, next, prev } = usePagination(10);
+  const { page, limit, goTo, setLimit } = usePagination(10);
   const [correctionTarget, setCorrectionTarget] = useState<AttendanceRecord | null>(null);
   const [adminEditTarget, setAdminEditTarget] = useState<AttendanceRecord | null>(null);
 
@@ -102,17 +101,13 @@ export function MyAttendanceHistory({ isAdminOrHr, onAdminEditSuccess, refreshKe
           <AttendanceHistoryTable
             records={records?.data ?? []}
             isAdminOrHr={isAdminOrHr}
+            page={page}
+            limit={limit}
+            total={records?.meta.total ?? 0}
+            onPageChange={(p, pageSize) => { if (pageSize !== limit) setLimit(pageSize); else goTo(p); }}
             onRequestCorrection={setCorrectionTarget}
             onAdminEdit={setAdminEditTarget}
           />
-
-          {records && records.meta.totalPages > 1 && (
-            <Pagination
-              page={page} totalPages={records.meta.totalPages}
-              total={records.meta.total} limit={limit}
-              onPrev={prev} onNext={next}
-            />
-          )}
         </>
       )}
 

@@ -1,7 +1,10 @@
 'use client';
 
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/Button';
+import { Button } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { Pencil, Wrench } from 'lucide-react';
+import { DataTable } from '@/components/antd/data-table';
 import { Badge } from '@/components/ui/Badge';
 import { formatDate, formatDateTime, formatHours, formatDistanceKm } from '@/utils/format';
 import { CorrectedBadge } from './corrected-badge';
@@ -28,11 +31,31 @@ export function WfmBadges({ record }: { record: AttendanceRecord }) {
   );
 }
 
+// ─── Office in/out badge ──────────────────────────────────────────────────────
+
+function OfficeBadge({ label, inOffice, distanceM, hint }: { label: string; inOffice: boolean; distanceM?: number | null; hint: string }) {
+  return (
+    <span
+      title={distanceM != null ? `${hint} · ${formatDistanceKm(distanceM)}` : undefined}
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${
+        inOffice ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+      }`}
+    >
+      {label}
+      {distanceM != null && ` (${formatDistanceKm(distanceM)})`}
+    </span>
+  );
+}
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface AttendanceHistoryTableProps {
   records: AttendanceRecord[];
   isAdminOrHr: boolean;
+  page: number;
+  limit: number;
+  total: number;
+  onPageChange: (page: number, pageSize: number) => void;
   onRequestCorrection: (rec: AttendanceRecord) => void;
   onAdminEdit: (rec: AttendanceRecord) => void;
 }
@@ -42,99 +65,139 @@ interface AttendanceHistoryTableProps {
 export function AttendanceHistoryTable({
   records,
   isAdminOrHr,
+  page,
+  limit,
+  total,
+  onPageChange,
   onRequestCorrection,
   onAdminEdit,
 }: AttendanceHistoryTableProps) {
   const { t } = useTranslation();
 
-  return (
-    <div className="hidden sm:block overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="border-b border-gray-100 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-          <tr>
-            <th className="px-6 py-3 text-left whitespace-nowrap">{t('common.date')}</th>
-            <th className="px-6 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('attendance.shiftLabel')}</th>
-            <th className="px-6 py-3 text-left whitespace-nowrap">{t('attendance.checkinLabel')}</th>
-            <th className="px-6 py-3 text-left whitespace-nowrap">{t('attendance.checkoutLabel')}</th>
-            <th className="px-6 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('reports.colHours')}</th>
-            <th className="px-6 py-3 text-left whitespace-nowrap">{t('common.status')}</th>
-            <th className="px-6 py-3 text-left whitespace-nowrap hidden xl:table-cell">{t('common.notes')}</th>
-            <th className="px-6 py-3 text-left whitespace-nowrap w-32">{t('common.actions')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
-          {records.map((rec) => (
-            <tr key={rec.id} className="hover:bg-gray-50 transition-colors">
-              <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(rec.checkinTime ?? rec.date)}</td>
-              <td className="px-6 py-3 text-gray-500 text-xs hidden md:table-cell">
-                {rec.shift ? rec.shift.name : '—'}
-                {rec.shift && <span className="block text-gray-400">{rec.shift.startTime}–{rec.shift.endTime}</span>}
-              </td>
-              <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDateTime(rec.checkinTime)}</td>
-              <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDateTime(rec.checkoutTime)}</td>
-              <td className="px-6 py-3 font-medium text-indigo-600 whitespace-nowrap hidden md:table-cell">{formatHours(rec.workingHours)}</td>
-              <td className="px-6 py-3">
-                <div className="flex flex-wrap items-center gap-1">
-                  <WfmBadges record={rec} />
-                  {rec.checkinLat != null && (
-                    <span
-                      title={rec.officeDistanceM != null ? `${t('attendance.checkinLabel')} · ${formatDistanceKm(rec.officeDistanceM)}` : undefined}
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
-                        rec.isInOffice ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-                      }`}
-                    >
-                      IN: {rec.isInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}
-                      {rec.officeDistanceM != null && ` (${formatDistanceKm(rec.officeDistanceM)})`}
-                    </span>
-                  )}
-                  {rec.checkoutTime && rec.checkoutLat != null && (
-                    <span
-                      title={rec.checkoutOfficeDistanceM != null ? `${t('attendance.checkoutLabel')} · ${formatDistanceKm(rec.checkoutOfficeDistanceM)}` : undefined}
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${
-                        rec.checkoutIsInOffice ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-                      }`}
-                    >
-                      OUT: {rec.checkoutIsInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}
-                      {rec.checkoutOfficeDistanceM != null && ` (${formatDistanceKm(rec.checkoutOfficeDistanceM)})`}
-                    </span>
-                  )}
-                </div>
-              </td>
-              <td className="px-6 py-3 hidden xl:table-cell">
-                <div className="flex flex-col gap-1 text-[10px] text-gray-500 max-w-[200px]">
-                  {rec.checkinNote && <div className="bg-gray-50 p-1 rounded"><span className="font-bold text-gray-400">IN:</span> {rec.checkinNote}</div>}
-                  {rec.checkoutNote && <div className="bg-gray-50 p-1 rounded"><span className="font-bold text-gray-400">OUT:</span> {rec.checkoutNote}</div>}
-                  {rec.lateReason && <div className="bg-red-50 p-1 rounded"><span className="font-bold text-red-400">Trễ:</span> {rec.lateReason}</div>}
-                  {rec.earlyReason && <div className="bg-blue-50 p-1 rounded"><span className="font-bold text-blue-400">Sớm:</span> {rec.earlyReason}</div>}
-                  {!rec.checkinNote && !rec.checkoutNote && !rec.lateReason && !rec.earlyReason && (
-                    <span className="text-gray-300 italic uppercase tracking-widest text-[9px]">{t('common.noData')}</span>
-                  )}
-                </div>
-              </td>
-              <td className="px-6 py-3">
-                <div className="flex flex-col gap-1">
-                  {rec.isCorrected && <CorrectedBadge correctionRequestId={rec.correctionRequestId} />}
-                  <Button size="sm" variant="ghost" onClick={() => onRequestCorrection(rec)}>
-                    {t('attendance.requestCorrectionBtn')}
-                  </Button>
-                  {isAdminOrHr && (
-                    <Button size="sm" variant="secondary" onClick={() => onAdminEdit(rec)}>
-                      {t('attendance.adminEdit')}
-                    </Button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-          {records.length === 0 && (
-            <tr>
-              <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-400">
-                {t('attendance.noRecordsYet')}
-              </td>
-            </tr>
+  const columns: ColumnsType<AttendanceRecord> = [
+    {
+      title: t('common.date'),
+      key: 'date',
+      render: (_, rec) => <span className="whitespace-nowrap text-gray-700">{formatDate(rec.checkinTime ?? rec.date)}</span>,
+    },
+    {
+      title: t('attendance.shiftLabel'),
+      key: 'shift',
+      responsive: ['md'],
+      render: (_, rec) => (
+        <span className="text-xs text-gray-500">
+          {rec.shift ? rec.shift.name : '—'}
+          {rec.shift && <span className="block text-gray-400">{rec.shift.startTime}–{rec.shift.endTime}</span>}
+        </span>
+      ),
+    },
+    {
+      title: t('attendance.checkinLabel'),
+      key: 'checkin',
+      render: (_, rec) => <span className="whitespace-nowrap text-gray-600">{formatDateTime(rec.checkinTime)}</span>,
+    },
+    {
+      title: t('attendance.checkoutLabel'),
+      key: 'checkout',
+      render: (_, rec) => <span className="whitespace-nowrap text-gray-600">{formatDateTime(rec.checkoutTime)}</span>,
+    },
+    {
+      title: t('reports.colHours'),
+      key: 'hours',
+      responsive: ['md'],
+      render: (_, rec) => <span className="whitespace-nowrap font-medium text-indigo-600">{formatHours(rec.workingHours)}</span>,
+    },
+    {
+      title: t('common.status'),
+      key: 'status',
+      render: (_, rec) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <WfmBadges record={rec} />
+          {rec.checkinLat != null && (
+            <OfficeBadge
+              label={`IN: ${rec.isInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}`}
+              inOffice={!!rec.isInOffice}
+              distanceM={rec.officeDistanceM}
+              hint={t('attendance.checkinLabel')}
+            />
           )}
-        </tbody>
-      </table>
+          {rec.checkoutTime && rec.checkoutLat != null && (
+            <OfficeBadge
+              label={`OUT: ${rec.checkoutIsInOffice ? t('attendance.inOfficeLabel') : t('attendance.outsideLabel')}`}
+              inOffice={!!rec.checkoutIsInOffice}
+              distanceM={rec.checkoutOfficeDistanceM}
+              hint={t('attendance.checkoutLabel')}
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      title: t('common.notes'),
+      key: 'notes',
+      responsive: ['xl'],
+      render: (_, rec) => (
+        <div className="flex max-w-[200px] flex-col gap-1 text-[10px] text-gray-500">
+          {rec.checkinNote && <div className="rounded bg-gray-50 p-1"><span className="font-bold text-gray-400">IN:</span> {rec.checkinNote}</div>}
+          {rec.checkoutNote && <div className="rounded bg-gray-50 p-1"><span className="font-bold text-gray-400">OUT:</span> {rec.checkoutNote}</div>}
+          {rec.lateReason && <div className="rounded bg-red-50 p-1"><span className="font-bold text-red-400">Trễ:</span> {rec.lateReason}</div>}
+          {rec.earlyReason && <div className="rounded bg-blue-50 p-1"><span className="font-bold text-blue-400">Sớm:</span> {rec.earlyReason}</div>}
+          {!rec.checkinNote && !rec.checkoutNote && !rec.lateReason && !rec.earlyReason && (
+            <span className="text-[9px] uppercase italic tracking-widest text-gray-300">{t('common.noData')}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      align: 'center',
+      width: isAdminOrHr ? 96 : 60,
+      render: (_, rec) => (
+        <div className="flex flex-col items-center gap-1.5">
+          {rec.isCorrected && <CorrectedBadge correctionRequestId={rec.correctionRequestId} />}
+          <div className="flex justify-center gap-1.5 whitespace-nowrap">
+            <Button
+              size="small"
+              color="blue"
+              variant="outlined"
+              icon={<Pencil size={14} />}
+              title={t('attendance.requestCorrectionBtn')}
+              aria-label={t('attendance.requestCorrectionBtn')}
+              onClick={() => onRequestCorrection(rec)}
+            />
+            {isAdminOrHr && (
+              <Button
+                size="small"
+                color="purple"
+                variant="outlined"
+                icon={<Wrench size={14} />}
+                title={t('attendance.adminEdit')}
+                aria-label={t('attendance.adminEdit')}
+                onClick={() => onAdminEdit(rec)}
+              />
+            )}
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="hidden sm:block">
+      <DataTable<AttendanceRecord>
+        bordered
+        rowKey="id"
+        columns={columns}
+        dataSource={records}
+        page={page}
+        pageSize={limit}
+        total={total}
+        onPageChange={onPageChange}
+        pagination={{ showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }}
+        locale={{ emptyText: t('attendance.noRecordsYet') }}
+        scroll={{ x: 'max-content' }}
+      />
     </div>
   );
 }

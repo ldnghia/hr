@@ -21,16 +21,16 @@ export function CorrectionFilterBar({ onSearch, status, onStatusChange, dateRang
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <div className="w-56">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-full sm:w-56">
           <Input.Search
             allowClear
             placeholder={t('attendance.searchByReasonOrEmployee', 'Tìm kiếm...')}
             onSearch={onSearch}
           />
         </div>
-        <div className="w-40">
+        <div className="w-full sm:w-40">
           <Select
             allowClear
             placeholder={t('attendance.allStatuses', 'Tất cả trạng thái')}
@@ -45,7 +45,11 @@ export function CorrectionFilterBar({ onSearch, status, onStatusChange, dateRang
             ]}
           />
         </div>
-        <DatePicker.RangePicker value={dateRange} onChange={(val) => onDateRangeChange(val as CorrectionDateRange)} />
+        <DatePicker.RangePicker
+          value={dateRange}
+          onChange={(val) => onDateRangeChange(val as CorrectionDateRange)}
+          className="w-full sm:w-auto"
+        />
       </div>
       {extra}
     </div>

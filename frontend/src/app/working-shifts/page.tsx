@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { RotateCw, Pencil, Trash2 } from 'lucide-react';
+import { Button as AntButton } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -8,6 +11,8 @@ import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { Modal } from '@/components/ui/Modal';
 import { PageSpinner } from '@/components/ui/Spinner';
+import { FacetedFilter, FilterResetButton } from '@/components/ui/FacetedFilter';
+import { DataTable } from '@/components/antd/data-table';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 import { workingShiftService } from '@/services/working-shift.service';
@@ -335,6 +340,7 @@ export default function WorkingShiftsPage() {
   const [shifts,      setShifts]      = useState<Shift[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [deptFilter,  setDeptFilter]  = useState('');
+  const [search,      setSearch]      = useState('');
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState('');
 
@@ -369,39 +375,183 @@ export default function WorkingShiftsPage() {
   function openEdit(s: Shift) { setSelected(s); setModalOpen(true); }
   function openDelete(s: Shift) { setSelected(s); setDeleteOpen(true); }
 
+  const filteredShifts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return shifts;
+    return shifts.filter((s) => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q));
+  }, [shifts, search]);
+
+  const columns: ColumnsType<Shift> = [
+    {
+      title: t('workingShift.colName'),
+      key: 'name',
+      render: (_, s) => <span className="font-medium text-gray-900">{s.name}</span>,
+    },
+    {
+      title: t('workingShift.colCode'),
+      key: 'code',
+      responsive: ['sm'],
+      render: (_, s) => (
+        <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">{s.code}</span>
+      ),
+    },
+    {
+      title: t('workingShift.colTime'),
+      key: 'time',
+      render: (_, s) => (
+        <span className="whitespace-nowrap text-gray-700">
+          <span className="font-mono">{formatTime(s.startTime)} → {formatTime(s.endTime)}</span>
+          {s.isCrossDay && <CrossDayBadge />}
+        </span>
+      ),
+    },
+    {
+      title: t('workingShift.colDepartment'),
+      key: 'department',
+      responsive: ['md'],
+      render: (_, s) =>
+        s.department ? (
+          <span className="text-gray-500">
+            {s.department.name} <span className="text-xs text-gray-400">({s.department.code})</span>
+          </span>
+        ) : (
+          <span className="text-xs font-medium text-indigo-600">{t('workingShift.global')}</span>
+        ),
+    },
+    {
+      title: t('workingShift.colBreak'),
+      key: 'break',
+      align: 'right',
+      responsive: ['lg'],
+      render: (_, s) => <span className="text-gray-500">{s.breakMinutes}m</span>,
+    },
+    {
+      title: t('workingShift.colGraceLate'),
+      key: 'grace',
+      align: 'right',
+      responsive: ['lg'],
+      render: (_, s) => <span className="text-gray-500">{s.graceLateMinutes}m</span>,
+    },
+    {
+      title: t('workingShift.colDefault'),
+      key: 'default',
+      align: 'center',
+      responsive: ['md'],
+      render: (_, s) =>
+        s.isDefault ? (
+          <span className="whitespace-nowrap rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+            {t('workingShift.colDefault')}
+          </span>
+        ) : null,
+    },
+    {
+      title: t('workingShift.colStatus'),
+      key: 'status',
+      align: 'center',
+      responsive: ['sm'],
+      render: (_, s) =>
+        s.isActive ? (
+          <span className="whitespace-nowrap rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+            {t('common.active')}
+          </span>
+        ) : (
+          <span className="whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+            {t('common.inactive')}
+          </span>
+        ),
+    },
+    ...(canEdit
+      ? [{
+          title: '',
+          key: 'actions',
+          align: 'center' as const,
+          width: user?.role === 'admin' ? 96 : 60,
+          render: (_: unknown, s: Shift) => (
+            <div className="flex justify-center gap-1.5 whitespace-nowrap">
+              <AntButton
+                size="small"
+                color="blue"
+                variant="outlined"
+                icon={<Pencil size={14} />}
+                aria-label={t('common.edit')}
+                title={t('common.edit')}
+                onClick={() => openEdit(s)}
+              />
+              {user?.role === 'admin' && (
+                <AntButton
+                  size="small"
+                  color="danger"
+                  variant="outlined"
+                  icon={<Trash2 size={14} />}
+                  aria-label={t('workingShift.delete')}
+                  disabled={(s._count?.currentEmployees ?? 0) > 0}
+                  title={
+                    (s._count?.currentEmployees ?? 0) > 0
+                      ? t('workingShift.cannotDeleteEmployees')
+                      : t('workingShift.delete')
+                  }
+                  onClick={() => openDelete(s)}
+                />
+              )}
+            </div>
+          ),
+        }]
+      : []),
+  ];
+
   if (loading) return <AppShell title={t('workingShift.title')}><PageSpinner /></AppShell>;
 
   return (
     <AppShell title={t('workingShift.title')}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t('workingShift.title')}</h1>
-            <p className="text-sm text-gray-500">
-              {shifts.length} {t('workingShift.title').toLowerCase()}
-            </p>
+      <div className="space-y-4">
+
+        {error && <Alert variant="error" message={error} />}
+
+        {/* Toolbar: filters (left) + actions (right) — reference: booking list toolbar */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="w-full sm:w-64">
+              <Input
+                placeholder={t('employee.searchPlaceholder')}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            {departments.length > 0 && (
+              <FacetedFilter
+                label={t('workingShift.colDepartment')}
+                options={departments.map((d) => ({ value: String(d.id), label: `${d.name} (${d.code})` }))}
+                selected={deptFilter ? [deptFilter] : []}
+                onChange={(v) => setDeptFilter(v[0] ?? '')}
+                singleSelect
+                clearLabel={t('common.clear')}
+                panelWidth={260}
+              />
+            )}
+
+            <FilterResetButton
+              show={!!search || !!deptFilter}
+              onClick={() => { setSearch(''); setDeptFilter(''); }}
+              label={t('common.clear')}
+            />
           </div>
-          <div className="flex items-center gap-3">
-            <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none"
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => load()}
+              disabled={loading}
+              aria-label={t('common.refresh', 'Làm mới')}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50"
             >
-              <option value="">{t('workingShift.allShifts')}</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} ({d.code})
-                </option>
-              ))}
-            </select>
+              <RotateCw size={15} className={loading ? 'animate-spin' : undefined} />
+            </button>
             {canEdit && (
-              <Button onClick={openCreate}>{t('workingShift.add')}</Button>
+              <Button onClick={openCreate} className="shrink-0">{t('workingShift.add')}</Button>
             )}
           </div>
         </div>
-
-        {error && <Alert variant="error" message={error} />}
 
         {shifts.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 py-16 text-center">
@@ -411,101 +561,15 @@ export default function WorkingShiftsPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-5 py-3 text-left whitespace-nowrap min-w-[140px]">{t('workingShift.colName')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap w-28 hidden sm:table-cell">{t('workingShift.colCode')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap">{t('workingShift.colTime')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('workingShift.colDepartment')}</th>
-                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('workingShift.colBreak')}</th>
-                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('workingShift.colGraceLate')}</th>
-                  <th className="px-5 py-3 text-center whitespace-nowrap hidden md:table-cell">{t('workingShift.colDefault')}</th>
-                  <th className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">{t('workingShift.colStatus')}</th>
-                  {canEdit && <th className="px-5 py-3 text-right whitespace-nowrap w-32">{t('workingShift.colActions')}</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {shifts.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-900">{s.name}</td>
-                    <td className="px-5 py-3 whitespace-nowrap hidden sm:table-cell">
-                      <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">
-                        {s.code}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 whitespace-nowrap text-gray-700">
-                      <span className="font-mono">
-                        {formatTime(s.startTime)} → {formatTime(s.endTime)}
-                      </span>
-                      {s.isCrossDay && <CrossDayBadge />}
-                    </td>
-                    <td className="px-5 py-3 text-gray-500 hidden md:table-cell">
-                      {s.department ? (
-                        <span>
-                          {s.department.name}{' '}
-                          <span className="text-xs text-gray-400">({s.department.code})</span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-indigo-600 font-medium">{t('workingShift.global')}</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-500 whitespace-nowrap hidden lg:table-cell">
-                      {s.breakMinutes}m
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-500 whitespace-nowrap hidden lg:table-cell">
-                      {s.graceLateMinutes}m
-                    </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap hidden md:table-cell">
-                      {s.isDefault && (
-                        <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700 whitespace-nowrap">
-                          {t('workingShift.colDefault')}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">
-                      {s.isActive ? (
-                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 whitespace-nowrap">
-                          {t('common.active')}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500 whitespace-nowrap">
-                          {t('common.inactive')}
-                        </span>
-                      )}
-                    </td>
-                    {canEdit && (
-                      <td className="px-5 py-3">
-                        <div className="flex justify-end gap-2 whitespace-nowrap">
-                          <button
-                            onClick={() => openEdit(s)}
-                            className="rounded px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
-                          >
-                            {t('common.edit')}
-                          </button>
-                          {user?.role === 'admin' && (
-                            <button
-                              onClick={() => openDelete(s)}
-                              className="rounded px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                              disabled={(s._count?.currentEmployees ?? 0) > 0}
-                              title={
-                                (s._count?.currentEmployees ?? 0) > 0
-                                  ? t('workingShift.cannotDeleteEmployees')
-                                  : t('workingShift.delete')
-                              }
-                            >
-                              {t('common.delete')}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<Shift>
+            bordered
+            columns={columns}
+            dataSource={filteredShifts}
+            rowKey="id"
+            pagination={{ showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], pageSize: 20 }}
+            locale={{ emptyText: t('workingShift.noData') }}
+            scroll={{ x: 'max-content' }}
+          />
         )}
       </div>
 

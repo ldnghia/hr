@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Eye, Pencil, CheckCircle } from 'lucide-react';
 import { correctionService, type CorrectionRequest } from '@/services/attendance-correction.service';
@@ -127,40 +128,38 @@ export function CorrectionAdminPanel({ actionSlot }: Props = {}) {
       align: 'center',
       fixed: 'right',
       render: (_, req) => (
-        <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+        <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
           {req.status === 'pending' ? (
             <>
-              <button
-                type="button"
+              <Button
+                size="small"
+                color="green"
+                variant="outlined"
+                icon={<CheckCircle size={14} />}
                 title={t('attendance.review')}
+                aria-label={t('attendance.review')}
                 onClick={() => setReviewing(req)}
-                className="rounded p-1 text-green-500 hover:bg-green-50 transition-colors"
-              >
-                <CheckCircle size={15} />
-              </button>
-              <button
-                type="button"
+              />
+              <Button
+                size="small"
+                color="blue"
+                variant="outlined"
+                icon={<Pencil size={14} />}
                 title={t('common.edit', 'Sửa')}
+                aria-label={t('common.edit', 'Sửa')}
                 onClick={() => setEditing(req)}
-                className="rounded p-1 text-indigo-500 hover:bg-indigo-50 transition-colors"
-              >
-                <Pencil size={15} />
-              </button>
+              />
             </>
           ) : (
-            <>
-              <button
-                type="button"
-                title={t('attendance.view')}
-                onClick={() => setReviewing(req)}
-                className="rounded p-1 text-indigo-500 hover:bg-indigo-50 transition-colors"
-              >
-                <Eye size={15} />
-              </button>
-              <span className="rounded p-1 text-gray-300">
-                <Pencil size={15} />
-              </span>
-            </>
+            <Button
+              size="small"
+              color="blue"
+              variant="outlined"
+              icon={<Eye size={14} />}
+              title={t('attendance.view')}
+              aria-label={t('attendance.view')}
+              onClick={() => setReviewing(req)}
+            />
           )}
         </div>
       ),
@@ -194,6 +193,7 @@ export function CorrectionAdminPanel({ actionSlot }: Props = {}) {
           pageSize={pageSize}
           total={total}
           onPageChange={(p, ps) => { setPage(p); setPageSize(ps); }}
+          pagination={{ showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }}
           locale={{ emptyText: t('attendance.noCorrectionRequestsFound') }}
         />
       </div>

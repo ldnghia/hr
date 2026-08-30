@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
-import { Modal } from 'antd';
-import { Pencil, XCircle, Loader2, Info } from 'lucide-react';
+import { Modal, Button } from 'antd';
+import { Pencil, XCircle, Info } from 'lucide-react';
 import { correctionService, type CorrectionRequest } from '@/services/attendance-correction.service';
 import { CorrectionEditModal } from './correction-edit-modal';
 import { CorrectionFilterBar, type CorrectionDateRange } from './correction-filter-bar';
@@ -145,35 +145,28 @@ export function CorrectionRequestList({ actionSlot }: Props = {}) {
       align: 'center',
       fixed: 'right',
       render: (_, req) => (
-        <div className="flex items-center justify-center gap-2 whitespace-nowrap">
-          {req.status === 'pending' ? (
+        <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+          {req.status === 'pending' && (
             <>
-              <button
-                type="button"
+              <Button
+                size="small"
+                color="blue"
+                variant="outlined"
+                icon={<Pencil size={14} />}
                 title={t('common.edit', 'Sửa')}
+                aria-label={t('common.edit', 'Sửa')}
                 onClick={() => setEditing(req)}
-                className="rounded p-1 text-indigo-500 hover:bg-indigo-50 transition-colors"
-              >
-                <Pencil size={15} />
-              </button>
-              <button
-                type="button"
+              />
+              <Button
+                size="small"
+                color="danger"
+                variant="outlined"
+                loading={cancelling === req.id}
+                icon={!(cancelling === req.id) ? <XCircle size={14} /> : undefined}
                 title={t('attendance.cancelRequest')}
+                aria-label={t('attendance.cancelRequest')}
                 onClick={() => handleCancel(req.id)}
-                disabled={cancelling === req.id}
-                className="rounded p-1 text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
-              >
-                {cancelling === req.id ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
-              </button>
-            </>
-          ) : (
-            <>
-              <span className="rounded p-1 text-gray-300">
-                <Pencil size={15} />
-              </span>
-              <span className="rounded p-1 text-gray-300">
-                <XCircle size={15} />
-              </span>
+              />
             </>
           )}
           {req.reviewNote && (
@@ -214,6 +207,7 @@ export function CorrectionRequestList({ actionSlot }: Props = {}) {
           pageSize={pageSize}
           total={total}
           onPageChange={(p, ps) => { setPage(p); setPageSize(ps); }}
+          pagination={{ showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100] }}
           locale={{ emptyText: t('attendance.noCorrectionRequests') }}
         />
       </div>

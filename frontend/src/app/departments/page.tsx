@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { RotateCw, Pencil, Trash2 } from 'lucide-react';
+import { Button as AntButton } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -8,6 +11,8 @@ import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { Modal } from '@/components/ui/Modal';
 import { PageSpinner } from '@/components/ui/Spinner';
+import { FacetedFilter, FilterResetButton } from '@/components/ui/FacetedFilter';
+import { DataTable } from '@/components/antd/data-table';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 import { organizationService } from '@/services/organization.service';
@@ -325,6 +330,10 @@ export default function DepartmentsPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
 
+  const [search, setSearch]                 = useState('');
+  const [workingTypeFilter, setWorkingType] = useState('');
+  const [branchFilter, setBranchFilter]     = useState('');
+
   const [modalOpen, setModalOpen]     = useState(false);
   const [deleteOpen, setDeleteOpen]   = useState(false);
   const [selected, setSelected]       = useState<Department | null>(null);
@@ -352,23 +361,177 @@ export default function DepartmentsPage() {
   function openEdit(d: Department) { setSelected(d); setModalOpen(true); }
   function openDelete(d: Department) { setSelected(d); setDeleteOpen(true); }
 
+  const filteredDepartments = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return departments.filter((d) => {
+      if (q && !d.name.toLowerCase().includes(q) && !d.code.toLowerCase().includes(q)) return false;
+      if (workingTypeFilter && d.workingType !== workingTypeFilter) return false;
+      if (branchFilter && String(d.branchId ?? '') !== branchFilter) return false;
+      return true;
+    });
+  }, [departments, search, workingTypeFilter, branchFilter]);
+
+  const columns: ColumnsType<Department> = [
+    {
+      title: t('department.colName'),
+      key: 'name',
+      render: (_, dept) => <span className="font-medium text-gray-900">{dept.name}</span>,
+    },
+    {
+      title: t('department.colCode'),
+      key: 'code',
+      responsive: ['sm'],
+      render: (_, dept) => (
+        <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">{dept.code}</span>
+      ),
+    },
+    {
+      title: t('department.colWorkingType'),
+      key: 'workingType',
+      render: (_, dept) => <WorkingTypeBadge type={dept.workingType} />,
+    },
+    {
+      title: t('department.colBranch'),
+      key: 'branch',
+      responsive: ['md'],
+      render: (_, dept) => <span className="text-gray-500">{dept.branch?.name ?? '—'}</span>,
+    },
+    {
+      title: t('department.colPositions'),
+      key: 'positions',
+      align: 'right',
+      responsive: ['lg'],
+      render: (_, dept) => <span className="text-gray-500">{dept._count?.positions ?? '—'}</span>,
+    },
+    {
+      title: t('department.colEmployees'),
+      key: 'employees',
+      align: 'right',
+      responsive: ['lg'],
+      render: (_, dept) => <span className="text-gray-500">{dept._count?.employees ?? '—'}</span>,
+    },
+    {
+      title: t('department.colStatus'),
+      key: 'status',
+      align: 'center',
+      responsive: ['sm'],
+      render: (_, dept) =>
+        dept.isActive ? (
+          <span className="whitespace-nowrap rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+            {t('common.active')}
+          </span>
+        ) : (
+          <span className="whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+            {t('common.inactive')}
+          </span>
+        ),
+    },
+    ...(canEdit
+      ? [{
+          title: '',
+          key: 'actions',
+          align: 'center' as const,
+          width: user?.role === 'admin' ? 96 : 60,
+          render: (_: unknown, dept: Department) => (
+            <div className="flex justify-center gap-1.5 whitespace-nowrap">
+              <AntButton
+                size="small"
+                color="blue"
+                variant="outlined"
+                icon={<Pencil size={14} />}
+                aria-label={t('common.edit')}
+                title={t('common.edit')}
+                onClick={() => openEdit(dept)}
+              />
+              {user?.role === 'admin' && (
+                <AntButton
+                  size="small"
+                  color="danger"
+                  variant="outlined"
+                  icon={<Trash2 size={14} />}
+                  aria-label={t('department.delete')}
+                  disabled={(dept._count?.positions ?? 0) > 0}
+                  title={
+                    (dept._count?.positions ?? 0) > 0
+                      ? t('department.deletePositionsFirst')
+                      : t('department.delete')
+                  }
+                  onClick={() => openDelete(dept)}
+                />
+              )}
+            </div>
+          ),
+        }]
+      : []),
+  ];
+
   if (loading) return <AppShell title={t('department.title')}><PageSpinner /></AppShell>;
 
   return (
     <AppShell title={t('department.title')}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t('department.title')}</h1>
-            <p className="text-sm text-gray-500">{departments.length} {t('department.count')}</p>
-          </div>
-          {canEdit && (
-            <Button onClick={openCreate}>{t('department.add')}</Button>
-          )}
-        </div>
+      <div className="space-y-4">
 
         {error && <Alert variant="error" message={error} />}
+
+        {/* Toolbar: filters (left) + actions (right) — reference: booking list toolbar */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="w-full sm:w-64">
+              <Input
+                placeholder={t('employee.searchPlaceholder')}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <FacetedFilter
+              label={t('department.colWorkingType')}
+              options={[
+                { value: 'FIXED', label: t('department.workingTypeFixed') },
+                { value: 'SHIFT', label: t('department.workingTypeShift') },
+              ]}
+              selected={workingTypeFilter ? [workingTypeFilter] : []}
+              onChange={(v) => setWorkingType(v[0] ?? '')}
+              singleSelect
+              showSearch={false}
+              clearLabel={t('common.clear')}
+              panelWidth={180}
+            />
+
+            {branches.length > 0 && (
+              <FacetedFilter
+                label={t('common.branch')}
+                options={branches.map((b) => ({ value: String(b.id), label: b.name }))}
+                selected={branchFilter ? [branchFilter] : []}
+                onChange={(v) => setBranchFilter(v[0] ?? '')}
+                singleSelect
+                clearLabel={t('common.clear')}
+                panelWidth={240}
+              />
+            )}
+
+            <FilterResetButton
+              show={!!search || !!workingTypeFilter || !!branchFilter}
+              onClick={() => { setSearch(''); setWorkingType(''); setBranchFilter(''); }}
+              label={t('common.clear')}
+            />
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => load()}
+              disabled={loading}
+              aria-label={t('common.refresh', 'Làm mới')}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RotateCw size={15} className={loading ? 'animate-spin' : undefined} />
+            </button>
+            {canEdit && (
+              <Button onClick={openCreate} className="shrink-0">{t('department.add')}</Button>
+            )}
+          </div>
+        </div>
 
         {/* Table */}
         {departments.length === 0 ? (
@@ -381,81 +544,15 @@ export default function DepartmentsPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-5 py-3 text-left whitespace-nowrap min-w-[160px]">{t('department.colName')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap hidden sm:table-cell w-24">{t('department.colCode')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap">{t('department.colWorkingType')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('department.colBranch')}</th>
-                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('department.colPositions')}</th>
-                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('department.colEmployees')}</th>
-                  <th className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">{t('department.colStatus')}</th>
-                  {canEdit && <th className="px-5 py-3 text-right whitespace-nowrap w-32">{t('common.actions')}</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {departments.map((dept) => (
-                  <tr key={dept.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-900">{dept.name}</td>
-                    <td className="px-5 py-3 hidden sm:table-cell whitespace-nowrap">
-                      <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">
-                        {dept.code}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <WorkingTypeBadge type={dept.workingType} />
-                    </td>
-                    <td className="px-5 py-3 text-gray-500 hidden md:table-cell">{dept.branch?.name ?? '—'}</td>
-                    <td className="px-5 py-3 text-right text-gray-500 hidden lg:table-cell">
-                      {dept._count?.positions ?? '—'}
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-500 hidden lg:table-cell">
-                      {dept._count?.employees ?? '—'}
-                    </td>
-                    <td className="px-5 py-3 text-center hidden sm:table-cell whitespace-nowrap">
-                      {dept.isActive ? (
-                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 whitespace-nowrap">
-                          {t('common.active')}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500 whitespace-nowrap">
-                          {t('common.inactive')}
-                        </span>
-                      )}
-                    </td>
-                    {canEdit && (
-                      <td className="px-5 py-3">
-                        <div className="flex justify-end gap-2 whitespace-nowrap">
-                          <button
-                            onClick={() => openEdit(dept)}
-                            className="rounded px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
-                          >
-                            {t('common.edit')}
-                          </button>
-                          {user?.role === 'admin' && (
-                            <button
-                              onClick={() => openDelete(dept)}
-                              className="rounded px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                              disabled={(dept._count?.positions ?? 0) > 0}
-                              title={
-                                (dept._count?.positions ?? 0) > 0
-                                  ? t('department.deletePositionsFirst')
-                                  : t('department.delete')
-                              }
-                            >
-                              {t('common.delete')}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<Department>
+            bordered
+            columns={columns}
+            dataSource={filteredDepartments}
+            rowKey="id"
+            pagination={{ showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], pageSize: 20 }}
+            locale={{ emptyText: t('department.noData') }}
+            scroll={{ x: 'max-content' }}
+          />
         )}
       </div>
 

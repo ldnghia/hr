@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { RotateCw, Pencil, Trash2 } from 'lucide-react';
+import { Button as AntButton } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -8,6 +11,8 @@ import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { Modal } from '@/components/ui/Modal';
 import { PageSpinner } from '@/components/ui/Spinner';
+import { FacetedFilter, FilterResetButton } from '@/components/ui/FacetedFilter';
+import { DataTable } from '@/components/antd/data-table';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 import { organizationService } from '@/services/organization.service';
@@ -249,6 +254,7 @@ export default function PositionsPage() {
   const [positions,    setPositions]    = useState<Position[]>([]);
   const [departments,  setDepartments]  = useState<Department[]>([]);
   const [deptFilter,   setDeptFilter]   = useState('');
+  const [search,       setSearch]       = useState('');
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState('');
 
@@ -281,41 +287,169 @@ export default function PositionsPage() {
   function openEdit(p: Position) { setSelected(p); setModalOpen(true); }
   function openDelete(p: Position) { setSelected(p); setDeleteOpen(true); }
 
+  const filteredPositions = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return positions;
+    return positions.filter((p) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q));
+  }, [positions, search]);
+
+  const columns: ColumnsType<Position> = [
+    {
+      title: t('common.name'),
+      key: 'name',
+      render: (_, pos) => (
+        <div>
+          <span className="font-medium text-gray-900">{pos.name}</span>
+          {pos.description && (
+            <p className="max-w-xs truncate text-xs font-normal text-gray-400">{pos.description}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: t('common.code'),
+      key: 'code',
+      responsive: ['sm'],
+      render: (_, pos) => (
+        <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">{pos.code}</span>
+      ),
+    },
+    {
+      title: t('common.department'),
+      key: 'department',
+      responsive: ['md'],
+      render: (_, pos) =>
+        pos.department ? (
+          <span className="text-gray-700">
+            {pos.department.name}{' '}
+            <span className="text-xs text-gray-400">({pos.department.code})</span>
+          </span>
+        ) : '—',
+    },
+    {
+      title: t('department.colWorkingType'),
+      key: 'workingType',
+      responsive: ['sm'],
+      render: (_, pos) =>
+        pos.department?.workingType === 'SHIFT' ? (
+          <span className="whitespace-nowrap rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">SHIFT</span>
+        ) : (
+          <span className="whitespace-nowrap rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">FIXED</span>
+        ),
+    },
+    {
+      title: t('department.colEmployees'),
+      key: 'employees',
+      align: 'right',
+      responsive: ['lg'],
+      render: (_, pos) => <span className="text-gray-500">{pos._count?.employees ?? '—'}</span>,
+    },
+    {
+      title: t('department.colStatus'),
+      key: 'status',
+      align: 'center',
+      responsive: ['sm'],
+      render: (_, pos) =>
+        pos.isActive ? (
+          <span className="whitespace-nowrap rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+            {t('common.active')}
+          </span>
+        ) : (
+          <span className="whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+            {t('common.inactive')}
+          </span>
+        ),
+    },
+    ...(canEdit
+      ? [{
+          title: '',
+          key: 'actions',
+          align: 'center' as const,
+          width: 96,
+          render: (_: unknown, pos: Position) => (
+            <div className="flex justify-center gap-1.5 whitespace-nowrap">
+              <AntButton
+                size="small"
+                color="blue"
+                variant="outlined"
+                icon={<Pencil size={14} />}
+                aria-label={t('common.edit')}
+                title={t('common.edit')}
+                onClick={() => openEdit(pos)}
+              />
+              <AntButton
+                size="small"
+                color="danger"
+                variant="outlined"
+                icon={<Trash2 size={14} />}
+                aria-label={t('position.delete')}
+                disabled={(pos._count?.employees ?? 0) > 0}
+                title={
+                  (pos._count?.employees ?? 0) > 0
+                    ? t('position.cannotDeleteEmployees')
+                    : t('position.delete')
+                }
+                onClick={() => openDelete(pos)}
+              />
+            </div>
+          ),
+        }]
+      : []),
+  ];
+
   if (loading) return <AppShell title={t('position.title')}><PageSpinner /></AppShell>;
 
   return (
     <AppShell title={t('position.title')}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t('position.title')}</h1>
-            <p className="text-sm text-gray-500">
-              {positions.length} {t('position.count')}
-              {deptFilter && ` ${t('position.inDepartment')}`}
-            </p>
+      <div className="space-y-4">
+
+        {error && <Alert variant="error" message={error} />}
+
+        {/* Toolbar: filters (left) + actions (right) — reference: booking list toolbar */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="w-full sm:w-64">
+              <Input
+                placeholder={t('employee.searchPlaceholder')}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            {departments.length > 0 && (
+              <FacetedFilter
+                label={t('common.department')}
+                options={departments.map((d) => ({ value: String(d.id), label: `${d.name} (${d.code})` }))}
+                selected={deptFilter ? [deptFilter] : []}
+                onChange={(v) => setDeptFilter(v[0] ?? '')}
+                singleSelect
+                clearLabel={t('common.clear')}
+                panelWidth={260}
+              />
+            )}
+
+            <FilterResetButton
+              show={!!search || !!deptFilter}
+              onClick={() => { setSearch(''); setDeptFilter(''); }}
+              label={t('common.clear')}
+            />
           </div>
-          <div className="flex items-center gap-3">
-            {/* Department filter */}
-            <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none"
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => load()}
+              disabled={loading}
+              aria-label={t('common.refresh', 'Làm mới')}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50"
             >
-              <option value="">{t('position.allDepartments')}</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} ({d.code})
-                </option>
-              ))}
-            </select>
+              <RotateCw size={15} className={loading ? 'animate-spin' : undefined} />
+            </button>
             {canEdit && (
-              <Button onClick={openCreate}>{t('position.add')}</Button>
+              <Button onClick={openCreate} className="shrink-0">{t('position.add')}</Button>
             )}
           </div>
         </div>
-
-        {error && <Alert variant="error" message={error} />}
 
         {/* Table */}
         {positions.length === 0 ? (
@@ -326,97 +460,15 @@ export default function PositionsPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th className="px-5 py-3 text-left whitespace-nowrap min-w-[160px]">{t('common.name')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap w-24 hidden sm:table-cell">{t('common.code')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap hidden md:table-cell">{t('common.department')}</th>
-                  <th className="px-5 py-3 text-left whitespace-nowrap hidden sm:table-cell">{t('department.colWorkingType')}</th>
-                  <th className="px-5 py-3 text-right whitespace-nowrap hidden lg:table-cell">{t('department.colEmployees')}</th>
-                  <th className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">{t('department.colStatus')}</th>
-                  {canEdit && <th className="px-5 py-3 text-right whitespace-nowrap w-32">{t('common.actions')}</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {positions.map((pos) => (
-                  <tr key={pos.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-900">
-                      {pos.name}
-                      {pos.description && (
-                        <p className="text-xs font-normal text-gray-400 truncate max-w-xs">
-                          {pos.description}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 whitespace-nowrap hidden sm:table-cell">
-                      <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700">
-                        {pos.code}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-gray-700 hidden md:table-cell">
-                      {pos.department ? (
-                        <span>
-                          {pos.department.name}{' '}
-                          <span className="text-xs text-gray-400">({pos.department.code})</span>
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td className="px-5 py-3 hidden sm:table-cell">
-                      {pos.department?.workingType === 'SHIFT' ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 whitespace-nowrap">
-                          SHIFT
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 whitespace-nowrap">
-                          FIXED
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right text-gray-500 hidden lg:table-cell">
-                      {pos._count?.employees ?? '—'}
-                    </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap hidden sm:table-cell">
-                      {pos.isActive ? (
-                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 whitespace-nowrap">
-                          {t('common.active')}
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500 whitespace-nowrap">
-                          {t('common.inactive')}
-                        </span>
-                      )}
-                    </td>
-                    {canEdit && (
-                      <td className="px-5 py-3">
-                        <div className="flex justify-end gap-2 whitespace-nowrap">
-                          <button
-                            onClick={() => openEdit(pos)}
-                            className="rounded px-2.5 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
-                          >
-                            {t('common.edit')}
-                          </button>
-                          <button
-                            onClick={() => openDelete(pos)}
-                            className="rounded px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                            disabled={(pos._count?.employees ?? 0) > 0}
-                            title={
-                              (pos._count?.employees ?? 0) > 0
-                                ? t('position.cannotDeleteEmployees')
-                                : t('position.delete')
-                            }
-                          >
-                            {t('common.delete')}
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<Position>
+            bordered
+            columns={columns}
+            dataSource={filteredPositions}
+            rowKey="id"
+            pagination={{ showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], pageSize: 20 }}
+            locale={{ emptyText: t('position.noData') }}
+            scroll={{ x: 'max-content' }}
+          />
         )}
       </div>
 

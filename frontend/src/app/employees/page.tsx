@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { RotateCw } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
+import { FacetedFilter, FilterResetButton } from '@/components/ui/FacetedFilter';
 import { employeeService } from '@/services/employee.service';
 import { organizationService } from '@/services/organization.service';
 import { usePagination } from '@/hooks/usePagination';
@@ -39,7 +41,7 @@ export default function EmployeesPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const { page, limit, goTo, next, prev, reset } = usePagination(20);
+  const { page, limit, goTo, setLimit, reset } = usePagination(20);
 
   // Load department list once for filter dropdown
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function EmployeesPage() {
 
   return (
     <AppShell title={pageTitle}>
-      <div className="space-y-5">
+      <div className="space-y-4">
 
         {/* Manager context banner */}
         {isManager && (
@@ -90,19 +92,65 @@ export default function EmployeesPage() {
           />
         )}
 
-        {/* Filters + Add button */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <form onSubmit={handleSearch} className="space-y-3">
-            {/* Row 1: search + add button */}
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
+        {/* Toolbar: filters (left) + actions (right) — reference: booking list toolbar */}
+        <form onSubmit={handleSearch} className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="w-full sm:w-64">
                 <Input
-                  label={t('common.search')}
                   placeholder={t('employee.searchPlaceholder')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
+
+              <FacetedFilter
+                label={t('common.status')}
+                options={[
+                  { value: 'probation', label: t('status.probation') },
+                  { value: 'official',  label: t('status.official') },
+                  { value: 'resigned',  label: t('status.resigned') },
+                  { value: 'inactive',  label: t('status.inactive') },
+                ]}
+                selected={statusFilter ? [statusFilter] : []}
+                onChange={(v) => { setStatusFilter(v[0] ?? ''); reset(); }}
+                singleSelect
+                showSearch={false}
+                clearLabel={t('common.clear')}
+                emptyLabel={t('common.noResults', 'Không có kết quả')}
+                panelWidth={180}
+              />
+
+              {/* Department filter — only for admin/hr */}
+              {canSeeAll && departments.length > 0 && (
+                <FacetedFilter
+                  label={t('employee.colDepartment')}
+                  options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+                  selected={departmentId ? [String(departmentId)] : []}
+                  onChange={(v) => { setDepartmentId(v[0] ? Number(v[0]) : ''); reset(); }}
+                  singleSelect
+                  clearLabel={t('common.clear')}
+                  emptyLabel={t('common.noResults', 'Không có kết quả')}
+                  panelWidth={240}
+                />
+              )}
+
+              <FilterResetButton
+                show={!!search || !!statusFilter || !!departmentId}
+                onClick={() => { setSearch(''); setStatusFilter(''); setDepartmentId(''); reset(); }}
+                label={t('common.clear')}
+              />
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => load()}
+                disabled={loading}
+                aria-label={t('common.refresh', 'Làm mới')}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                <RotateCw size={15} className={loading ? 'animate-spin' : undefined} />
+              </button>
               {canSeeAll && (
                 <Button type="button" onClick={() => setShowModal(true)} className="shrink-0">
                   <span className="hidden sm:inline">{t('employee.addEmployee')}</span>
@@ -110,54 +158,7 @@ export default function EmployeesPage() {
                 </Button>
               )}
             </div>
-
-            {/* Row 2: selects + action buttons */}
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1 w-full sm:w-auto">
-                <label className="block text-sm font-medium text-gray-700">{t('common.status')}</label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => { setStatusFilter(e.target.value); reset(); }}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">{t('common.all')}</option>
-                  <option value="probation">{t('status.probation')}</option>
-                  <option value="official">{t('status.official')}</option>
-                  <option value="resigned">{t('status.resigned')}</option>
-                  <option value="inactive">{t('status.inactive')}</option>
-                </select>
-              </div>
-
-              {/* Department filter — only for admin/hr */}
-              {canSeeAll && departments.length > 0 && (
-                <div className="space-y-1 w-full sm:w-auto">
-                  <label className="block text-sm font-medium text-gray-700">{t('employee.colDepartment')}</label>
-                  <select
-                    value={departmentId}
-                    onChange={(e) => { setDepartmentId(e.target.value ? Number(e.target.value) : ''); reset(); }}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="">{t('common.all')}</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <Button type="submit" variant="secondary">{t('common.search')}</Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => { setSearch(''); setStatusFilter(''); setDepartmentId(''); reset(); }}
-                >
-                  {t('common.clear')}
-                </Button>
-              </div>
-            </div>
-          </form>
-        </div>
+        </form>
 
         {/* Table */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -176,9 +177,10 @@ export default function EmployeesPage() {
             loading={loading}
             page={page}
             limit={limit}
-            onNext={next}
-            onPrev={prev}
-            onGoTo={goTo}
+            onPageChange={(p, pageSize) => {
+              if (pageSize !== limit) setLimit(pageSize);
+              else goTo(p);
+            }}
           />
         </div>
       </div>
