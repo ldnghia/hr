@@ -213,6 +213,19 @@ function buildEmployeeRows(
           isCorrected: rec?.isCorrected,
           correctionStatus: rec?.id ? corrMap.get(rec.id) : undefined,
         };
+      } else if (!isShift && isWeekend && rec?.isOnLeave) {
+        // Weekend with an approved-leave attendance row: render as leave, same as weekdays.
+        const lt = rec.leaveRequest?.type ?? 'annual';
+        status = lt === 'unpaid' ? 'unpaid' : lt === 'annual' ? 'annual' : 'special';
+        annualDays += rec.leaveRequest?.isHalfDay ? 0.5 : 1;
+        cell = {
+          dateStr: ds, day: d, dow, status,
+          leaveType: lt,
+          isHalfDay: rec.leaveRequest?.isHalfDay ?? false,
+          attendanceId: rec.id,
+        };
+        cells.push(cell);
+        continue;
       } else if (!isShift && isWeekend) {
         // Fixed-schedule employees: weekend off unless they have a record
         status = rec ? deriveCellStatus(rec) : 'off';
