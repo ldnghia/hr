@@ -47,6 +47,8 @@ export function EmployeeProfile({ employee, leaveBalance }: EmployeeProfileProps
         <div className="hidden sm:block text-right">
           <p className="font-mono text-lg font-bold text-indigo-600">{employee.code}</p>
           <p className="text-xs text-gray-400">{t('profile.employeeCode')}</p>
+          <p className="mt-2 text-sm text-gray-600">{formatDate(employee.joinDate)}</p>
+          <p className="text-xs text-gray-400">{t('profile.joinDate')}</p>
         </div>
       </div>
 

@@ -37,13 +37,14 @@ interface FormState {
   initialLeaveBalance: string;
   shiftId: string;
   deviceValidationMode: string;
+  joinDate: string;
 }
 
 type FormErrors = Partial<Record<keyof FormState, string>>;
 
 export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEditBalance = false, isAdmin = false, onSuccess }: EditEmployeeModalProps) {
   const { t } = useTranslation();
-  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '', shiftId: '', deviceValidationMode: 'DISABLED' });
+  const [form, setForm]         = useState<FormState>({ code: '', fullName: '', email: '', phone: '', status: '', role: '', branchId: '', departmentId: '', positionId: '', managerId: '', telegramId: '', initialLeaveBalance: '', shiftId: '', deviceValidationMode: 'DISABLED', joinDate: '' });
   const [errors, setErrors]     = useState<FormErrors>({});
   const [apiError, setApiError] = useState('');
   const [saving, setSaving]     = useState(false);
@@ -78,6 +79,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
       initialLeaveBalance: String(leaveBalance?.total ?? ''),
       shiftId:             String(employee.shiftId     ?? ''),
       deviceValidationMode: employee.deviceValidationMode ?? 'DISABLED',
+      joinDate:            employee.joinDate ? employee.joinDate.slice(0, 10) : '',
     });
     setErrors({});
     setApiError('');
@@ -191,6 +193,7 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
         managerId:    form.managerId    ? Number(form.managerId)     : undefined,
         telegramId:           form.telegramId || undefined,
         shiftId:              form.shiftId ? Number(form.shiftId) : null,
+        joinDate:             form.joinDate || undefined,
         ...(isAdmin && { deviceValidationMode: form.deviceValidationMode as 'DISABLED' | 'WARNING' | 'STRICT' }),
       });
 
@@ -289,6 +292,12 @@ export function EditEmployeeModal({ open, onClose, employee, leaveBalance, canEd
               ]}
             />
           </div>
+          <Input
+            label={t('profile.joinDate')}
+            type="date"
+            value={form.joinDate}
+            onChange={(e) => set('joinDate', e.target.value)}
+          />
         </fieldset>
 
         <hr className="border-gray-100" />

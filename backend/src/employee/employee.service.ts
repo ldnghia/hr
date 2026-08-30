@@ -284,6 +284,7 @@ export class EmployeeService {
         workingMode:          resolvedWorkingMode,
         shiftId:              dto.shiftId,
         telegramId:           dto.telegramId,
+        joinDate:             dto.joinDate ? new Date(dto.joinDate) : undefined,
         deviceValidationMode: dto.deviceValidationMode,
       },
       select: EMPLOYEE_SELECT,

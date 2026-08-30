@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsInt,
   IsIn,
+  IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -84,6 +85,11 @@ export class UpdateEmployeeDto {
   @IsOptional()
   @IsString()
   telegramId?: string;
+
+  @ApiPropertyOptional({ example: '2026-01-15', description: 'Join date (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  joinDate?: string;
 
   @ApiPropertyOptional({ enum: ['DISABLED', 'WARNING', 'STRICT'], description: 'Device validation mode (admin only)' })
   @IsOptional()

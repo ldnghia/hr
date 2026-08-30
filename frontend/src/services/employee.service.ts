@@ -41,6 +41,7 @@ export interface UpdateEmployeePayload {
   managerId?: number;
   telegramId?: string;
   shiftId?: number | null;
+  joinDate?: string;
 }
 
 export interface AdminUpdateProfilePayload {
